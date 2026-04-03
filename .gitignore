@@ -8,4 +8,6 @@ __pycache__/
 .env
 
 # --- Project ---
+.cache/
+out/
 tmp/
