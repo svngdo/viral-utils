@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 class Config:
     log_level: str
     gemini_api_key: str
+    groq_api_key: str
+    openrouter_api_key: str
 
 
 def load_config() -> Config:
@@ -15,6 +17,8 @@ def load_config() -> Config:
     config = Config(
         log_level=os.getenv("LOG_LEVEL", "debug"),
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+        groq_api_key=os.getenv("GROQ_API_KEY", ""),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
     )
     return config
 
