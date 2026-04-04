@@ -17,6 +17,7 @@ def setup_logging() -> None:
     for logger_name in ["google_genai", "httpx", "httpcore"]:
         logger = logging.getLogger(logger_name)
         logger.disabled = True
+        logger.propagate = False
 
 
 def get_logger(name: str) -> logging.Logger:
