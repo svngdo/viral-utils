@@ -15,6 +15,8 @@ class Config:
     gemini_api_key: str
     groq_api_key: str
     openrouter_api_key: str
+    groq_base_url: str
+    openrouter_base_urL: str
 
     # --- Paths ---
     cache_dir: Path
@@ -33,23 +35,15 @@ def load_config() -> Config:
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         groq_api_key=os.getenv("GROQ_API_KEY", ""),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
+        groq_base_url=os.getenv("GROQ_BASE_URL", ""),
+        openrouter_base_urL=os.getenv("OPENROUTER_BASE_URL", ""),
         cache_dir=Path(os.getenv("CACHE_DIR", str(_HOME / f".cache/{PROJECT_NAME}"))),
-        sources_dir=Path(
-            os.getenv("SOURCES_DIR", str(_HOME / "Desktop/douyin/0_sources"))
-        ),
+        sources_dir=Path(os.getenv("SOURCES_DIR", str(_HOME / "Desktop/douyin/0_sources"))),
         raw_dir=Path(os.getenv("RAW_DIR", str(_HOME / "Desktop/douyin/1_raw"))),
-        processed_dir=Path(
-            os.getenv("PROCESSED_DIR", str(_HOME / "Desktop/douyin/2_processed"))
-        ),
-        exports_dir=Path(
-            os.getenv("EXPORTS_DIR", str(_HOME / "Desktop/douyin/3_exports"))
-        ),
-        archives_dir=Path(
-            os.getenv("ARCHIVES_DIR", str(_HOME / "Desktop/douyin/4_archives"))
-        ),
-        downloads_dir=Path(
-            os.getenv("DOWNLOADS_DIR", str(_HOME / "Desktop/douyin/5_downloads"))
-        ),
+        processed_dir=Path(os.getenv("PROCESSED_DIR", str(_HOME / "Desktop/douyin/2_processed"))),
+        exports_dir=Path(os.getenv("EXPORTS_DIR", str(_HOME / "Desktop/douyin/3_exports"))),
+        archives_dir=Path(os.getenv("ARCHIVES_DIR", str(_HOME / "Desktop/douyin/4_archives"))),
+        downloads_dir=Path(os.getenv("DOWNLOADS_DIR", str(_HOME / "Desktop/douyin/5_downloads"))),
     )
 
 
