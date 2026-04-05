@@ -13,10 +13,15 @@ class Config:
     # --- Environment ---
     log_level: str
     gemini_api_key: str
+
     groq_api_key: str
-    openrouter_api_key: str
     groq_base_url: str
+
+    openrouter_api_key: str
     openrouter_base_urL: str
+
+    cerebras_api_key: str
+    cerebras_base_url: str
 
     # --- Paths ---
     cache_dir: Path
@@ -32,11 +37,18 @@ def load_config() -> Config:
     load_dotenv()
     return Config(
         log_level=os.getenv("LOG_LEVEL", "debug"),
+        # Gemini
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+        # Groq
         groq_api_key=os.getenv("GROQ_API_KEY", ""),
-        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         groq_base_url=os.getenv("GROQ_BASE_URL", ""),
+        # Openrouter
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         openrouter_base_urL=os.getenv("OPENROUTER_BASE_URL", ""),
+        # Cerebras
+        cerebras_base_url=os.getenv("CEREBRAS_BASE_URL", ""),
+        cerebras_api_key=os.getenv("CEREBRAS_API_KEY", ""),
+        # Dir
         cache_dir=Path(os.getenv("CACHE_DIR", str(_HOME / f".cache/{PROJECT_NAME}"))),
         sources_dir=Path(os.getenv("SOURCES_DIR", str(_HOME / "Desktop/douyin/0_sources"))),
         raw_dir=Path(os.getenv("RAW_DIR", str(_HOME / "Desktop/douyin/1_raw"))),

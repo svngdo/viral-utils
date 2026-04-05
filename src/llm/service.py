@@ -11,25 +11,69 @@ logger = get_logger(__name__)
 
 
 # Gemini models - tried in order, same key
-# gemini-1.5 and gemini-2.0 are shut down / shutting down June 1 2026
+# Free tier via Google AI Studio API key
 GEMINI_MODELS = [
-    "gemini-3.1-pro-preview",  # most capable, paid
-    "gemini-3-flash-preview",  # free tier available
-    "gemini-3.1-flash-lite-preview",  # free tier, fastest/cheapest
-    "gemini-2.5-flash",  # stable fallback
-    "gemini-2.5-flash-lite",  # stable cheap fallback
+    "gemini-3-flash-preview",  # 20 req/day, 5 rpm
+    "gemini-3.1-flash-lite-preview",  # 500 req/day, 15 rpm
+    "gemini-2.5-flash",  # 20 req/day, 5 rpm
+    "gemini-2.5-flash-lite",  # 20 req/day, 10 rpm
 ]
 
 # (api_key_env, base_url_constant, model_id)
 OPENAI_COMPAT_MODELS = [
-    # OpenRouter free models
-    ("OPENROUTER_API_KEY", settings.openrouter_base_urL, "deepseek/deepseek-r1:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_urL, "deepseek/deepseek-chat-v3-1:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_urL, "meta-llama/llama-4-maverick:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_urL, "qwen/qwen3-235b-a22b:free"),
-    # Groq free tier (rate-limited but no cost)
-    ("GROQ_API_KEY", settings.groq_base_url, "openai/gpt-oss-120b"),
+    # --- OpenRouter free models ---
+    # 50 req/day free (1000/day with $10 lifetime topup), 20 rpm
+    # Best quality
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "deepseek/deepseek-r1:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "deepseek/deepseek-chat-v3.1:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "meta-llama/llama-4-maverick:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "qwen/qwen3-235b-a22b:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "openai/gpt-oss-120b:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "openai/gpt-oss-20b:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "qwen/qwen3-coder:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "meta-llama/llama-3.3-70b-instruct:free"),
+    (
+        "OPENROUTER_API_KEY",
+        settings.openrouter_base_url,
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+    ),
+    (
+        "OPENROUTER_API_KEY",
+        settings.openrouter_base_url,
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+    ),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "google/gemma-3-27b-it:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "google/gemma-3-12b-it:free"),
+    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "nvidia/nemotron-3-nano-30b-a3b:free"),
+    # --- Groq free tier ---
+    # All models accessible free, rate-limited only, no credit card
+    ("GROQ_API_KEY", settings.groq_base_url, "openai/gpt-oss-120b"),  # 1000 req/day, 8k tpm
+    ("GROQ_API_KEY", settings.groq_base_url, "openai/gpt-oss-20b"),  # 1000 req/day, 8k tpm
+    (
+        "GROQ_API_KEY",
+        settings.groq_base_url,
+        "moonshotai/kimi-k2-instruct-0905",
+    ),  # 1000 req/day, 10k tpm
+    ("GROQ_API_KEY", settings.groq_base_url, "llama-3.3-70b-versatile"),  # 1000 req/day, 12k tpm
+    (
+        "GROQ_API_KEY",
+        settings.groq_base_url,
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+    ),  # 1000 req/day, 30k tpm
+    (
+        "GROQ_API_KEY",
+        settings.groq_base_url,
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+    ),  # 1000 req/day
+    ("GROQ_API_KEY", settings.groq_base_url, "qwen/qwen3-32b"),  # 1000 req/day, 6k tpm
     ("GROQ_API_KEY", settings.groq_base_url, "llama-3.1-8b-instant"),
+    # --- Cerebras free tier ---
+    # 14400 req/day, 1M tokens/day — very generous
+    ("CEREBRAS_API_KEY", settings.cerebras_base_url, "gpt-oss-120b"),
+    ("CEREBRAS_API_KEY", settings.cerebras_base_url, "qwen3-235b-a22b"),
+    ("CEREBRAS_API_KEY", settings.cerebras_base_url, "llama-3.3-70b"),
+    ("CEREBRAS_API_KEY", settings.cerebras_base_url, "qwen3-32b"),
+    ("CEREBRAS_API_KEY", settings.cerebras_base_url, "llama3.1-8b"),
 ]
 
 
