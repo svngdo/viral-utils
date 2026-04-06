@@ -11,8 +11,9 @@ class VideoConfig:
 
     # --- Subtitle ---
     sub_frame_gap_tolerance: int = 30
-    sub_text_similarity_threshold: float = 0.8
-    sub_frame_padding: int = 4
+    sub_text_similarity_threshold: float = 0.7
+    sub_box_iou_threshold: float = 0.7
+    sub_frame_padding: int = 3
 
     # --- Inpaint ---
     inpaint_scale: float = 0.6

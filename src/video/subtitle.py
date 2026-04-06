@@ -8,7 +8,7 @@ from uuid import uuid4
 from src.llm.service import LLMClient
 from src.video.config import VideoConfig
 from src.video.constants import TRANSLATE_SUBTITLE_SYSTEM_PROMPT
-from src.video.types import Subtitle, VideoMetadata
+from src.video.types import BoundingBox, Subtitle, VideoMetadata
 
 
 def _update_subtitle(subtitle: Subtitle, result: Subtitle) -> None:
@@ -40,6 +40,28 @@ def _pad_subtitles(
     ]
 
 
+def _is_same_box(
+    box1: BoundingBox,
+    box2: BoundingBox,
+    iou_threshold: float,
+) -> bool:
+    """Check if two bounding boxes overlap sufficiently (IoU-based)."""
+    x_left = max(box1.x1, box2.x1)
+    y_bottom = max(box1.y1, box2.y1)
+    x_right = min(box1.x2, box2.x2)
+    y_top = min(box1.y2, box2.y2)
+
+    if x_right <= x_left or y_top <= y_bottom:
+        return False
+
+    intersection = (x_right - x_left) * (y_top - y_bottom)
+    area1 = (box1.x2 - box1.x1) * (box1.y2 - box1.y1)
+    area2 = (box2.x2 - box2.x1) * (box2.y2 - box2.y1)
+    union = area1 + area2 - intersection
+
+    return (intersection / union) >= iou_threshold if union > 0 else False
+
+
 def merge_subtitles(
     ocr_results: list[Subtitle],
     metadata: VideoMetadata,
@@ -53,32 +75,34 @@ def merge_subtitles(
     active: dict[str, Subtitle] = {}
     closed: list[Subtitle] = []
 
-    for ocr_result in ocr_results:
+    for res in ocr_results:
         best_id, best_score = None, 0.0
 
-        for sid, s in active.items():
-            if ocr_result.start - s.end > time_gap_tolerance:
+        for sub_id, sub in active.items():
+            # skip if text exceeds time gap tolerance
+            if res.start - sub.end > time_gap_tolerance:
                 continue
 
-            score = SequenceMatcher(None, s.text, ocr_result.text).ratio()
+            # skip if boxes are in different screen regions
+            if not _is_same_box(sub.bbox, res.bbox, iou_threshold=config.sub_box_iou_threshold):
+                continue
+
+            # skip if text are not the same
+            score = SequenceMatcher(None, sub.text, res.text).ratio()
             if score > config.sub_text_similarity_threshold and score > best_score:
-                best_id = sid
+                best_id = sub_id
                 best_score = score
 
         if best_id:
-            s = active[best_id]
-            _update_subtitle(subtitle=s, result=ocr_result)
+            sub = active[best_id]
+            _update_subtitle(subtitle=sub, result=res)
         else:
-            active[str(uuid4())] = replace(ocr_result)
+            active[str(uuid4())] = replace(res)
 
-        to_close = [
-            sid
-            for sid, s in active.items()
-            if ocr_result.start - s.end > time_gap_tolerance
-        ]
+        to_close = [sid for sid, s in active.items() if res.start - s.end > time_gap_tolerance]
 
-        for sid in to_close:
-            closed.append(active.pop(sid))
+        for sub_id in to_close:
+            closed.append(active.pop(sub_id))
 
     closed.extend(active.values())
 
