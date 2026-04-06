@@ -16,34 +16,38 @@ def _inpaint(
     metadata: VideoMetadata,
     config: VideoConfig,
 ) -> np.ndarray:
-    # YUV I420 → BGR
+    # YUV I420 -> BGR
     bgr = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)
     w, h = metadata.width, metadata.height
 
     for b in boxes:
-        # expand ROI for inpaint context
         ex1 = max(0, b.x1 - config.inpaint_expand)
         ey1 = max(0, b.y1 - config.inpaint_expand)
         ex2 = min(w, b.x2 + config.inpaint_expand)
         ey2 = min(h, b.y2 + config.inpaint_expand)
 
+        cx1 = max(b.x1, ex1)
+        cy1 = max(b.y1, ey1)
+        cx2 = min(b.x2, ex2)
+        cy2 = min(b.y2, ey2)
+
+        if cx2 <= cx1 or cy2 <= cy1:
+            continue
+
         roi = bgr[ey1:ey2, ex1:ex2].copy()
         rh, rw = roi.shape[:2]
 
-        # scale down for faster inpainting
         sw = max(1, int(rw * config.inpaint_scale))
         sh = max(1, int(rh * config.inpaint_scale))
         scaled_roi = cv2.resize(roi, (sw, sh), interpolation=cv2.INTER_AREA)
 
-        # mask subtitle box in scaled space
         mask = np.zeros((sh, sw), dtype=np.uint8)
-        mx1 = int((b.x1 - ex1) * config.inpaint_scale)
-        my1 = int((b.y1 - ey1) * config.inpaint_scale)
-        mx2 = int((b.x2 - ex1) * config.inpaint_scale)
-        my2 = int((b.y2 - ey1) * config.inpaint_scale)
+        mx1 = int((cx1 - ex1) * config.inpaint_scale)
+        my1 = int((cy1 - ey1) * config.inpaint_scale)
+        mx2 = int((cx2 - ex1) * config.inpaint_scale)
+        my2 = int((cy2 - ey1) * config.inpaint_scale)
         mask[my1:my2, mx1:mx2] = 255
 
-        # inpaint → scale back → paste inner box only
         inpainted = cv2.resize(
             cv2.inpaint(
                 scaled_roi,
@@ -54,12 +58,14 @@ def _inpaint(
             (rw, rh),
             interpolation=cv2.INTER_CUBIC,
         )
-        bgr[b.y1 : b.y2, b.x1 : b.x2] = inpainted[
-            b.y1 - ey1 : b.y2 - ey1,
-            b.x1 - ex1 : b.x2 - ex1,
-        ]
 
-    # BGR → YUV I420
+        bx1 = cx1 - ex1
+        by1 = cy1 - ey1
+        bx2 = cx2 - ex1
+        by2 = cy2 - ey1
+
+        bgr[cy1:cy2, cx1:cx2] = inpainted[by1:by2, bx1:bx2]
+
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2YUV_I420)
 
 
