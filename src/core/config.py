@@ -18,7 +18,7 @@ class Config:
     groq_base_url: str
 
     openrouter_api_key: str
-    openrouter_base_urL: str
+    openrouter_base_url: str
 
     cerebras_api_key: str
     cerebras_base_url: str
@@ -44,7 +44,7 @@ def load_config() -> Config:
         groq_base_url=os.getenv("GROQ_BASE_URL", ""),
         # Openrouter
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
-        openrouter_base_urL=os.getenv("OPENROUTER_BASE_URL", ""),
+        openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", ""),
         # Cerebras
         cerebras_base_url=os.getenv("CEREBRAS_BASE_URL", ""),
         cerebras_api_key=os.getenv("CEREBRAS_API_KEY", ""),
