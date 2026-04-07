@@ -4,8 +4,8 @@ from google import genai
 from google.genai import types
 from openai import OpenAI
 
-from src.core.config import settings
-from src.core.logging import get_logger
+from src.config import settings
+from src.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -25,13 +25,25 @@ OPENAI_COMPAT_MODELS = [
     # 50 req/day free (1000/day with $10 lifetime topup), 20 rpm
     # Best quality
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "deepseek/deepseek-r1:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "deepseek/deepseek-chat-v3.1:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "meta-llama/llama-4-maverick:free"),
+    (
+        "OPENROUTER_API_KEY",
+        settings.openrouter_base_url,
+        "deepseek/deepseek-chat-v3.1:free",
+    ),
+    (
+        "OPENROUTER_API_KEY",
+        settings.openrouter_base_url,
+        "meta-llama/llama-4-maverick:free",
+    ),
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "qwen/qwen3-235b-a22b:free"),
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "openai/gpt-oss-120b:free"),
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "openai/gpt-oss-20b:free"),
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "qwen/qwen3-coder:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "meta-llama/llama-3.3-70b-instruct:free"),
+    (
+        "OPENROUTER_API_KEY",
+        settings.openrouter_base_url,
+        "meta-llama/llama-3.3-70b-instruct:free",
+    ),
     (
         "OPENROUTER_API_KEY",
         settings.openrouter_base_url,
@@ -44,17 +56,33 @@ OPENAI_COMPAT_MODELS = [
     ),
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "google/gemma-3-27b-it:free"),
     ("OPENROUTER_API_KEY", settings.openrouter_base_url, "google/gemma-3-12b-it:free"),
-    ("OPENROUTER_API_KEY", settings.openrouter_base_url, "nvidia/nemotron-3-nano-30b-a3b:free"),
+    (
+        "OPENROUTER_API_KEY",
+        settings.openrouter_base_url,
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+    ),
     # --- Groq free tier ---
     # All models accessible free, rate-limited only, no credit card
-    ("GROQ_API_KEY", settings.groq_base_url, "openai/gpt-oss-120b"),  # 1000 req/day, 8k tpm
-    ("GROQ_API_KEY", settings.groq_base_url, "openai/gpt-oss-20b"),  # 1000 req/day, 8k tpm
+    (
+        "GROQ_API_KEY",
+        settings.groq_base_url,
+        "openai/gpt-oss-120b",
+    ),  # 1000 req/day, 8k tpm
+    (
+        "GROQ_API_KEY",
+        settings.groq_base_url,
+        "openai/gpt-oss-20b",
+    ),  # 1000 req/day, 8k tpm
     (
         "GROQ_API_KEY",
         settings.groq_base_url,
         "moonshotai/kimi-k2-instruct-0905",
     ),  # 1000 req/day, 10k tpm
-    ("GROQ_API_KEY", settings.groq_base_url, "llama-3.3-70b-versatile"),  # 1000 req/day, 12k tpm
+    (
+        "GROQ_API_KEY",
+        settings.groq_base_url,
+        "llama-3.3-70b-versatile",
+    ),  # 1000 req/day, 12k tpm
     (
         "GROQ_API_KEY",
         settings.groq_base_url,
@@ -93,7 +121,9 @@ def _call_gemini(model: str, system_prompt: str, content: str) -> str:
     return response.text.strip()
 
 
-def _call_openai(api_key: str, base_url: str, model: str, system_prompt: str, content: str) -> str:
+def _call_openai(
+    api_key: str, base_url: str, model: str, system_prompt: str, content: str
+) -> str:
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.chat.completions.create(
         model=model,

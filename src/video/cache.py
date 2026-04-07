@@ -2,7 +2,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from src.core.config import settings
+from src.config import settings
 from src.video.types import BoundingBox, Subtitle
 
 

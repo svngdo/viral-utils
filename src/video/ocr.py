@@ -7,11 +7,9 @@ import numpy as np
 from ocrmac import ocrmac
 from ocrmac.ocrmac import OCR
 
-from src.core.logging import get_logger
+from src.logging import get_logger
 from src.video.config import VideoConfig
-from src.video.ffmpeg import (
-    iter_frames,
-)
+from src.video.ffmpeg import iter_frames
 from src.video.types import BoundingBox, Subtitle, VideoMetadata
 
 logger = get_logger(__name__)

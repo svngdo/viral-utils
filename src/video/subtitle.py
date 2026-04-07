@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from src.llm.service import LLMClient
+from src.llm.client import LLMClient
 from src.video.config import VideoConfig
 from src.video.constants import TRANSLATE_SUBTITLE_SYSTEM_PROMPT
 from src.video.types import BoundingBox, Subtitle, VideoMetadata
@@ -84,7 +84,9 @@ def merge_subtitles(
                 continue
 
             # skip if boxes are in different screen regions
-            if not _is_same_box(sub.bbox, res.bbox, iou_threshold=config.sub_box_iou_threshold):
+            if not _is_same_box(
+                sub.bbox, res.bbox, iou_threshold=config.sub_box_iou_threshold
+            ):
                 continue
 
             # skip if text are not the same
@@ -99,7 +101,9 @@ def merge_subtitles(
         else:
             active[str(uuid4())] = replace(res)
 
-        to_close = [sid for sid, s in active.items() if res.start - s.end > time_gap_tolerance]
+        to_close = [
+            sid for sid, s in active.items() if res.start - s.end > time_gap_tolerance
+        ]
 
         for sub_id in to_close:
             closed.append(active.pop(sub_id))
@@ -124,12 +128,15 @@ def _to_srt_timestamp(t: float) -> str:
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
-def translate_subtitle(subtitles: list[Subtitle], client: LLMClient) -> list[Subtitle]:
+def translate_subtitle(
+    subtitles: list[Subtitle],
+    llm_client: LLMClient,
+) -> list[Subtitle]:
     subtitle_map = {str(i): s for i, s in enumerate(subtitles)}
     text_map = {str(i): s.text.strip() for i, s in enumerate(subtitles)}
     content = json.dumps(text_map, ensure_ascii=False)
 
-    response = client.complete(
+    response = llm_client.complete(
         system_prompt=TRANSLATE_SUBTITLE_SYSTEM_PROMPT,
         content=content,
     )

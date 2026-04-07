@@ -1,8 +1,8 @@
 import time
 from pathlib import Path
 
-from src.core.logging import get_logger
-from src.llm.service import LLMClient
+from src.llm.client import LLMClient
+from src.logging import get_logger
 from src.video import cache as video_cache
 from src.video import ocr as video_ocr
 from src.video.config import VideoConfig
@@ -55,8 +55,12 @@ def remove_video_subtitles(
         logger.info(f"SRT file already exists, skipping: {srt_path.name}")
     else:
         logger.info("Translating subtitles...")
-        translated_subtitles = translate_subtitle(subtitles=subtitles, client=client)
-        logger.info(f"Translated {len(subtitles)} subtitles")
+        filtered_subtitles = [s for s in subtitles if s.conf > 0.5]
+        translated_subtitles = translate_subtitle(
+            subtitles=filtered_subtitles,
+            llm_client=client,
+        )
+        logger.info(f"Translated {len(filtered_subtitles)} subtitles")
 
         write_srt(translated_subtitles, srt_path=srt_path)
         logger.info(f"Subtitles saved to: {srt_path.name}")
