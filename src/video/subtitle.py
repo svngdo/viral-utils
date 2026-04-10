@@ -6,9 +6,12 @@ from typing import Any
 from uuid import uuid4
 
 from src.llm.client import LLMClient
+from src.logging import get_logger
 from src.video.config import VideoConfig
 from src.video.constants import TRANSLATE_SUBTITLE_SYSTEM_PROMPT
 from src.video.types import BoundingBox, Subtitle, VideoMetadata
+
+logger = get_logger(__name__)
 
 
 def _update_subtitle(subtitle: Subtitle, result: Subtitle) -> None:
@@ -129,9 +132,9 @@ def _to_srt_timestamp(t: float) -> str:
 
 
 def translate_subtitle(
-    subtitles: list[Subtitle],
-    llm_client: LLMClient,
+    subtitles: list[Subtitle], llm_client: LLMClient, config: VideoConfig
 ) -> list[Subtitle]:
+    subtitles = [s for s in subtitles if s.conf >= config.translate_conf_threshold]
     subtitle_map = {str(i): s for i, s in enumerate(subtitles)}
     text_map = {str(i): s.text.strip() for i, s in enumerate(subtitles)}
     content = json.dumps(text_map, ensure_ascii=False)
@@ -140,8 +143,9 @@ def translate_subtitle(
         system_prompt=TRANSLATE_SUBTITLE_SYSTEM_PROMPT,
         content=content,
     )
-
     data: dict[str, Any] = json.loads(response)
+
+    logger.info(f"Translated {len(subtitles)} subtitles")
 
     return [
         replace(s, text=data.get(idx), bbox=replace(s.bbox))
@@ -160,3 +164,5 @@ def write_srt(subtitles: list[Subtitle], srt_path: str | Path) -> None:
     )
 
     srt_path.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
+
+    logger.info(f"Subtitles saved to: {srt_path}")
