@@ -16,7 +16,7 @@ def get_path(input_path: str | Path) -> Path:
     if not input_path.exists():
         raise FileNotFoundError(f"Cache not found: {input_path}")
 
-    cache_path = settings.cache_dir / f"subtitle{input_path.stem}.json"
+    cache_path = settings.cache_dir / f"subtitle-{input_path.stem}.json"
     return cache_path
 
 
