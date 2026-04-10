@@ -1,13 +1,14 @@
 import time
 from pathlib import Path
 
+from src.config import settings
 from src.llm.client import LLMClient
 from src.logging import get_logger
 from src.video import cache as video_cache
 from src.video import ocr as video_ocr
 from src.video.config import VideoConfig
 from src.video.ffmpeg import get_video_metadata
-from src.video.filter import filter_and_encode
+from src.video.inpaint import inpaint_and_encode
 from src.video.subtitle import merge_subtitles, translate_subtitle, write_srt
 
 logger = get_logger(__name__)
@@ -18,6 +19,7 @@ def remove_video_subtitles(
     output_path: str | Path,
     srt_path: str | Path,
 ) -> None:
+
     # --- INPUT ---
     input_path = Path(input_path)
     output_path = Path(output_path)
@@ -26,54 +28,56 @@ def remove_video_subtitles(
     # --- DECLARATION ---
     metadata = get_video_metadata(input_path=input_path)
     video_config = VideoConfig()
-    ocr_engine = video_ocr.Ocrmac()
     client = LLMClient()
-    logger.info("Extracted video metadata.")
 
-    # --- OCR & EXTRACT SUBTITLES ---
+    # --- OCR ---
     if video_cache.is_exists(input_path):
+        # Read cache
         subtitles = video_cache.read(input_path)
     else:
         ocr_results = video_ocr.ocr(
             input_path=input_path,
             metadata=metadata,
-            ocr_engine=ocr_engine,
             config=video_config,
         )
-        logger.info(
-            f"OCRed {int(metadata.total_frames / video_config.ocr_sample_interval)} frames"
-        )
+
         subtitles = merge_subtitles(
             ocr_results=ocr_results,
             metadata=metadata,
             config=video_config,
         )
+
+        # Write cache
         video_cache.write(input_path, subtitles)
+
+    start = time.perf_counter()
 
     # --- TRANSLATE SUBTITLES ---
     if srt_path.exists():
         logger.info(f"SRT file already exists, skipping: {srt_path.name}")
     else:
-        logger.info("Translating subtitles...")
-        filtered_subtitles = [s for s in subtitles if s.conf > 0.5]
-        translated_subtitles = translate_subtitle(
-            subtitles=filtered_subtitles,
-            llm_client=client,
-        )
-        logger.info(f"Translated {len(filtered_subtitles)} subtitles")
+        while True:
+            try:
+                translated_subtitles = translate_subtitle(
+                    subtitles=subtitles,
+                    llm_client=client,
+                    config=video_config,
+                )
+                write_srt(translated_subtitles, srt_path=srt_path)
+                break
+            except Exception:
+                pass
 
-        write_srt(translated_subtitles, srt_path=srt_path)
-        logger.info(f"Subtitles saved to: {srt_path.name}")
+    logger.info(f"Translate time {time.perf_counter() - start}")
 
-    # --- OUTPUT ---
-    filter_and_encode(
+    # --- INPAINT & ENCODE ---
+    inpaint_and_encode(
         input_path=input_path,
         output_path=output_path,
         metadata=metadata,
         subtitles=subtitles,
         config=video_config,
     )
-    logger.info(f"Video encoded to: {output_path.name}")
 
 
 def remove_video_subtitles_by_dir(in_dir: str | Path, out_dir: str | Path):
@@ -82,8 +86,8 @@ def remove_video_subtitles_by_dir(in_dir: str | Path, out_dir: str | Path):
     in_dir = Path(in_dir).expanduser()
     out_dir = Path(out_dir).expanduser()
     files = list(in_dir.glob("*.mp4"))
+    processed = 0
 
-    counter = 0
     for f in files:
         output_path = out_dir / f.name
         srt_path = out_dir / f"{f.stem}.srt"
@@ -97,7 +101,10 @@ def remove_video_subtitles_by_dir(in_dir: str | Path, out_dir: str | Path):
             output_path=output_path,
             srt_path=srt_path,
         )
-        counter += 1
+
+        f.rename(settings.archives_raw_dir / f.name)
+
+        processed += 1
 
     elapsed = time.perf_counter() - start
-    logger.info(f"Processed {counter} files in {elapsed}")
+    logger.info(f"Processed {processed} files in {elapsed}")
