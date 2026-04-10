@@ -5,9 +5,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from src.logging import get_logger
 from src.video.config import VideoConfig
 from src.video.ffmpeg import build_copy_cmd, build_encode_cmd, iter_frames
 from src.video.types import BoundingBox, Subtitle, VideoMetadata
+
+logger = get_logger(__name__)
 
 
 def _inpaint(
@@ -69,32 +72,32 @@ def _inpaint(
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2YUV_I420)
 
 
-def filter_and_encode(
+def inpaint_and_encode(
     input_path: str | Path,
     output_path: str | Path,
     metadata: VideoMetadata,
     subtitles: list[Subtitle],
     config: VideoConfig,
 ) -> None:
+    subtitles = [s for s in subtitles if s.conf >= config.inpaint_conf_threshold]
     total_frames = metadata.total_frames
-
     copy_cmd = build_copy_cmd(input_path, output_path)
+
     if not subtitles:
         subprocess.run(copy_cmd, check=True)
         return
 
     encode_cmd = build_encode_cmd(input_path, metadata, output_path)
     encoder = subprocess.Popen(encode_cmd, stdin=subprocess.PIPE)
+
     try:
         for frame_idx, frame_ts, frame_yuv in iter_frames(input_path, metadata):
-            if frame_idx % 10 == 0:
-                print(f"Filtered {frame_idx}/{total_frames}", end="\r")
-
             active_boxes = [
                 subtitle.bbox
                 for subtitle in subtitles
                 if subtitle.start <= frame_ts <= subtitle.end
             ]
+
             if active_boxes:
                 frame_yuv = _inpaint(
                     frame=frame_yuv,
@@ -104,8 +107,11 @@ def filter_and_encode(
                 )
 
                 time.sleep(config.inpaint_delay)
-
             encoder.stdin.write(frame_yuv.tobytes())
+
+            print(f"Inpainted {frame_idx}/{total_frames}", end="\r")
     finally:
         encoder.stdin.close()
         encoder.wait()
+
+    logger.info(f"Video encoded to: {output_path}")
