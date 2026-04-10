@@ -30,6 +30,7 @@ class Config:
     processed_dir: Path
     exports_dir: Path
     archives_dir: Path
+    archives_raw_dir: Path
     downloads_dir: Path
 
 
@@ -50,12 +51,25 @@ def load_config() -> Config:
         cerebras_api_key=os.getenv("CEREBRAS_API_KEY", ""),
         # Dir
         cache_dir=Path(os.getenv("CACHE_DIR", str(_HOME / f".cache/{PROJECT_NAME}"))),
-        sources_dir=Path(os.getenv("SOURCES_DIR", str(_HOME / "Desktop/douyin/0_sources"))),
+        sources_dir=Path(
+            os.getenv("SOURCES_DIR", str(_HOME / "Desktop/douyin/0_sources"))
+        ),
         raw_dir=Path(os.getenv("RAW_DIR", str(_HOME / "Desktop/douyin/1_raw"))),
-        processed_dir=Path(os.getenv("PROCESSED_DIR", str(_HOME / "Desktop/douyin/2_processed"))),
-        exports_dir=Path(os.getenv("EXPORTS_DIR", str(_HOME / "Desktop/douyin/3_exports"))),
-        archives_dir=Path(os.getenv("ARCHIVES_DIR", str(_HOME / "Desktop/douyin/4_archives"))),
-        downloads_dir=Path(os.getenv("DOWNLOADS_DIR", str(_HOME / "Desktop/douyin/5_downloads"))),
+        processed_dir=Path(
+            os.getenv("PROCESSED_DIR", str(_HOME / "Desktop/douyin/2_processed"))
+        ),
+        exports_dir=Path(
+            os.getenv("EXPORTS_DIR", str(_HOME / "Desktop/douyin/3_exports"))
+        ),
+        archives_dir=Path(
+            os.getenv("ARCHIVES_DIR", str(_HOME / "Desktop/douyin/4_archives"))
+        ),
+        archives_raw_dir=Path(
+            os.getenv("ARCHIVES_RAW_DIR", str(_HOME / "Desktop/douyin/4_archives_raw"))
+        ),
+        downloads_dir=Path(
+            os.getenv("DOWNLOADS_DIR", str(_HOME / "Desktop/douyin/5_downloads"))
+        ),
     )
 
 
