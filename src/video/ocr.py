@@ -1,14 +1,13 @@
 import time
-from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 
 from src.logging import get_logger
-from src.video.config import VideoConfig
+from src.video.config import video_config
 from src.video.ffmpeg import iter_frames
-from src.video.types import BoundingBox, Subtitle, VideoMetadata
+from src.video.schemas import BoundingBox, Subtitle, VideoMetadata
 
 logger = get_logger(__name__)
 
@@ -85,7 +84,6 @@ class PaddleOcr(OcrEngine):
         import cv2
 
         gray = frame[: metadata.height]
-        # gray = cv2.resize(gray, (gray.shape[1] * 3 // 4, gray.shape[0] * 3 // 4))
         rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         result = self._engine.predict(rgb)
         boxes = []
@@ -135,37 +133,35 @@ def _get_ocr_engine(engine_name: str) -> OcrEngine:
             return PaddleOcr()
 
 
-def ocr(
-    input_path: str | Path,
+def run(
+    video_path: str | Path,
     metadata: VideoMetadata,
-    config: VideoConfig,
 ) -> list[Subtitle]:
-    input_path = Path(input_path)
-    ocr_engine = _get_ocr_engine(config.ocr_engine_name)
+    video_path = Path(video_path)
+    ocr_engine = _get_ocr_engine(video_config.ocr_engine_name)
     subtitles: list[Subtitle] = []
 
-    total_frames = int(metadata.total_frames / config.ocr_sample_interval)
+    total_frames = int(metadata.total_frames / video_config.ocr_sample_interval)
     scanned_frames = 0
 
-    for frame_idx, frame_ts, frame_yuv in iter_frames(input_path, metadata):
-        if frame_idx % config.ocr_sample_interval != 0:
+    for index, timestamp, frame in iter_frames(video_path, metadata):
+        if index % video_config.ocr_sample_interval != 0:
             continue
 
-        time.sleep(config.ocr_delay)
+        time.sleep(video_config.ocr_delay)
 
-        results = ocr_engine.detect(frame=frame_yuv, metadata=metadata)
-
+        results = ocr_engine.detect(frame=frame, metadata=metadata)
         for r in results:
-            if config.ocr_chinese_only and not _is_chinese(r.text):
+            if video_config.ocr_chinese_only and not _is_chinese(r.text):
                 continue
 
             subtitles.append(
                 Subtitle(
                     text=r.text,
                     conf=r.conf,
-                    bbox=replace(r.bbox),
-                    start=frame_ts,
-                    end=frame_ts,
+                    bbox=r.bbox,
+                    start=timestamp,
+                    end=timestamp,
                 )
             )
 

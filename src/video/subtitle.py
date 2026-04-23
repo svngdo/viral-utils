@@ -7,9 +7,9 @@ from uuid import uuid4
 
 from src.llm.client import LLMClient
 from src.logging import get_logger
-from src.video.config import VideoConfig
+from src.video.config import video_config
 from src.video.constants import TRANSLATE_SUBTITLE_SYSTEM_PROMPT
-from src.video.types import BoundingBox, Subtitle, VideoMetadata
+from src.video.schemas import BoundingBox, Subtitle, VideoMetadata
 
 logger = get_logger(__name__)
 
@@ -29,15 +29,15 @@ def _update_subtitle(subtitle: Subtitle, result: Subtitle) -> None:
 def _pad_subtitles(
     subtitles: list[Subtitle],
     metadata: VideoMetadata,
-    config: VideoConfig,
-):
+) -> list[Subtitle]:
     frame_duration = 1 / metadata.fps
-    padding_ts = frame_duration * config.sub_frame_padding
+    padding = frame_duration * video_config.sub_frame_padding
     return [
-        replace(
-            s,
-            start=max(s.start - padding_ts, 0),
-            end=min(s.end + padding_ts, metadata.duration),
+        s.model_copy(
+            update={
+                "start": max(s.start - padding, 0),
+                "end": min(s.end + padding, metadata.duration),
+            }
         )
         for s in subtitles
     ]
@@ -66,35 +66,45 @@ def _is_same_box(
 
 
 def merge_subtitles(
-    ocr_results: list[Subtitle],
+    subtitles: list[Subtitle],
     metadata: VideoMetadata,
-    config: VideoConfig,
 ) -> list[Subtitle]:
-    if not ocr_results:
+    if not subtitles:
         return []
 
-    fps = metadata.fps
-    time_gap_tolerance = config.sub_frame_gap_tolerance / fps
+    sorted_subs = sorted(subtitles, key=lambda s: s.start)
+    merged_subs: list[Subtitle] = []
     active: dict[str, Subtitle] = {}
-    closed: list[Subtitle] = []
 
-    for res in ocr_results:
+    for res in sorted_subs:
         best_id, best_score = None, 0.0
 
         for sub_id, sub in active.items():
             # skip if text exceeds time gap tolerance
-            if res.start - sub.end > time_gap_tolerance:
+            if res.start - sub.end > video_config.sub_time_gap_tolerance:
+                logger.debug(
+                    f"Skipped sub {sub_id} - exceeds time gap tolerance: {res.start - sub.end}"
+                )
                 continue
 
             # skip if boxes are in different screen regions
-            if not _is_same_box(
-                sub.bbox, res.bbox, iou_threshold=config.sub_box_iou_threshold
-            ):
+            same_box = _is_same_box(
+                sub.bbox,
+                res.bbox,
+                iou_threshold=video_config.sub_box_iou_threshold,
+            )
+            if not same_box:
+                logger.debug(
+                    f"Skipped sub {sub_id} - not in same screen region: {sub.bbox} vs {res.bbox}"
+                )
                 continue
 
             # skip if text are not the same
             score = SequenceMatcher(None, sub.text, res.text).ratio()
-            if score > config.sub_text_similarity_threshold and score > best_score:
+            if (
+                score > video_config.sub_text_similarity_threshold
+                and score > best_score
+            ):
                 best_id = sub_id
                 best_score = score
 
@@ -102,25 +112,23 @@ def merge_subtitles(
             sub = active[best_id]
             _update_subtitle(subtitle=sub, result=res)
         else:
-            active[str(uuid4())] = replace(res)
+            active[str(uuid4())] = res.model_copy()
 
         to_close = [
-            sid for sid, s in active.items() if res.start - s.end > time_gap_tolerance
+            sid
+            for sid, s in active.items()
+            if res.start - s.end > video_config.sub_time_gap_tolerance
         ]
 
         for sub_id in to_close:
-            closed.append(active.pop(sub_id))
+            merged_subs.append(active.pop(sub_id))
 
-    closed.extend(active.values())
+    merged_subs.extend(active.values())
 
-    sorted_subs = sorted(closed, key=lambda s: s.start)
-
-    padded = _pad_subtitles(
-        subtitles=sorted_subs,
+    return _pad_subtitles(
+        subtitles=sorted(merged_subs, key=lambda s: s.start),
         metadata=metadata,
-        config=config,
     )
-    return padded
 
 
 def _to_srt_timestamp(t: float) -> str:
@@ -132,16 +140,19 @@ def _to_srt_timestamp(t: float) -> str:
 
 
 def translate_subtitle(
-    subtitles: list[Subtitle], llm_client: LLMClient, config: VideoConfig
+    subtitles: list[Subtitle],
+    llm_client: LLMClient,
 ) -> list[Subtitle]:
-    subtitles = [s for s in subtitles if s.conf >= config.translate_conf_threshold]
+    subtitles = [
+        s for s in subtitles if s.conf >= video_config.translate_conf_threshold
+    ]
     subtitle_map = {str(i): s for i, s in enumerate(subtitles)}
     text_map = {str(i): s.text.strip() for i, s in enumerate(subtitles)}
     content = json.dumps(text_map, ensure_ascii=False)
 
     response = llm_client.complete(
         system_prompt=TRANSLATE_SUBTITLE_SYSTEM_PROMPT,
-        content=content,
+        prompt=content,
     )
     data: dict[str, Any] = json.loads(response)
 

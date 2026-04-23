@@ -10,11 +10,9 @@ from src.logging import get_logger
 logger = get_logger(__name__)
 
 
-# Gemini models - tried in order, same key
-# Free tier via Google AI Studio API key
 GEMINI_MODELS = [
-    "gemini-3-flash-preview",  # 20 req/day, 5 rpm
     "gemini-3.1-flash-lite-preview",  # 500 req/day, 15 rpm
+    "gemini-3-flash-preview",  # 20 req/day, 5 rpm
     "gemini-2.5-flash",  # 20 req/day, 5 rpm
     "gemini-2.5-flash-lite",  # 20 req/day, 10 rpm
 ]
@@ -118,31 +116,40 @@ def _call_gemini(model: str, system_prompt: str, content: str) -> str:
             temperature=0.3,
         ),
     )
+    if response.text is None:
+        raise RuntimeError("Gemini returned empty response")
     return response.text.strip()
 
 
 def _call_openai(
-    api_key: str, base_url: str, model: str, system_prompt: str, content: str
+    api_key: str,
+    base_url: str,
+    model: str,
+    system_prompt: str,
+    prompt: str,
 ) -> str:
     client = OpenAI(api_key=api_key, base_url=base_url)
     response = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content},
+            {"role": "user", "content": prompt},
         ],
         temperature=0.3,
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if content is None:
+        raise RuntimeError("OpenAI returned empty response")
+    return content.strip()
 
 
 class LLMClient:
-    def complete(self, system_prompt: str, content: str) -> str:
+    def complete(self, system_prompt: str, prompt: str) -> str:
         errors = []
 
         for model in GEMINI_MODELS:
             try:
-                result = _call_gemini(model, system_prompt, content)
+                result = _call_gemini(model, system_prompt, prompt)
                 logger.info("LLM response via %s", model)
                 return result
             except Exception as e:
@@ -155,7 +162,7 @@ class LLMClient:
             if not api_key:
                 continue
             try:
-                result = _call_openai(api_key, base_url, model, system_prompt, content)
+                result = _call_openai(api_key, base_url, model, system_prompt, prompt)
                 logger.info("LLM response via %s", model)
                 return result
             except Exception as e:

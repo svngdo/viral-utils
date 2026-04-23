@@ -7,7 +7,6 @@ from typing import Any
 import numpy as np
 
 from src.video.schemas import VideoMetadata
-from src.video.types import VideoMetadata
 
 
 def _build_probe_cmd(input_path: str | Path) -> list[str]:
@@ -191,6 +190,8 @@ def iter_frames(
         stderr=subprocess.DEVNULL,
     )
     # fmt: on
+
+    assert decoder.stdout is not None
 
     frame_idx = 0
     try:
