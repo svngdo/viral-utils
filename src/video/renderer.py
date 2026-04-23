@@ -8,12 +8,12 @@ import numpy as np
 from src.logging import get_logger
 from src.video.config import VideoConfig
 from src.video.ffmpeg import build_copy_cmd, build_encode_cmd, iter_frames
-from src.video.types import BoundingBox, Subtitle, VideoMetadata
+from src.video.schemas import BoundingBox, Subtitle, VideoMetadata
 
 logger = get_logger(__name__)
 
 
-def _inpaint(
+def _inpaint_frame(
     frame: np.ndarray,
     boxes: list[BoundingBox],
     metadata: VideoMetadata,
@@ -73,7 +73,7 @@ def _inpaint(
 
 
 def inpaint_and_encode(
-    input_path: str | Path,
+    video_path: str | Path,
     output_path: str | Path,
     metadata: VideoMetadata,
     subtitles: list[Subtitle],
@@ -81,17 +81,17 @@ def inpaint_and_encode(
 ) -> None:
     subtitles = [s for s in subtitles if s.conf >= config.inpaint_conf_threshold]
     total_frames = metadata.total_frames
-    copy_cmd = build_copy_cmd(input_path, output_path)
+    copy_cmd = build_copy_cmd(video_path, output_path)
 
     if not subtitles:
         subprocess.run(copy_cmd, check=True)
         return
 
-    encode_cmd = build_encode_cmd(input_path, metadata, output_path)
+    encode_cmd = build_encode_cmd(video_path, metadata, output_path)
     encoder = subprocess.Popen(encode_cmd, stdin=subprocess.PIPE)
 
     try:
-        for frame_idx, frame_ts, frame_yuv in iter_frames(input_path, metadata):
+        for frame_idx, frame_ts, frame_yuv in iter_frames(video_path, metadata):
             active_boxes = [
                 subtitle.bbox
                 for subtitle in subtitles
@@ -99,7 +99,7 @@ def inpaint_and_encode(
             ]
 
             if active_boxes:
-                frame_yuv = _inpaint(
+                frame_yuv = _inpaint_frame(
                     frame=frame_yuv,
                     boxes=active_boxes,
                     metadata=metadata,
