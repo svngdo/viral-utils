@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 
+from src.video.schemas import VideoMetadata
 from src.video.types import VideoMetadata
 
 
@@ -152,7 +153,7 @@ def color_flags(metadata: VideoMetadata) -> list[str]:
 
 
 def iter_frames(
-    input_path: str | Path,
+    video_path: str | Path,
     metadata: VideoMetadata,
 ) -> Generator[tuple[int, float, np.ndarray], None, None]:
     """Decode a video file and yield raw YUV420p frames one at a time.
@@ -174,24 +175,22 @@ def iter_frames(
 
     frame_bytes = metadata.width * metadata.height * 3 // 2
 
+    # fmt: off
     decoder = subprocess.Popen(
         [
             "ffmpeg",
-            "-v",
-            "error",
+            "-v", "error",
             *color_flags(metadata),
-            "-i",
-            str(input_path),
+            "-i", str(video_path),
             "-an",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "yuv420p",
+            "-f", "rawvideo",
+            "-pix_fmt", "yuv420p",
             "pipe:1",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
     )
+    # fmt: on
 
     frame_idx = 0
     try:
@@ -203,6 +202,8 @@ def iter_frames(
             yuv = np.frombuffer(raw, dtype=np.uint8).reshape(
                 metadata.height * 3 // 2, metadata.width
             )
+
+            # frame index, frame timestamp, frame array
             yield frame_idx, frame_idx / metadata.fps, yuv
             frame_idx += 1
     finally:
@@ -223,18 +224,15 @@ def build_copy_cmd(input_path: str | Path, output_path: str | Path) -> list[str]
     Returns:
         Argument list suitable for subprocess execution.
     """
-
+    # fmt: off
     return [
-        "ffmpeg",
-        "-y",
-        "-loglevel",
-        "error",
-        "-i",
-        str(input_path),
-        "-c",
-        "copy",
+        "ffmpeg", "-y",
+        "-loglevel", "error",
+        "-i", str(input_path),
+        "-c", "copy",
         str(output_path),
     ]
+    # fmt: on
 
 
 def _color_bsf_str(metadata: VideoMetadata) -> str:
