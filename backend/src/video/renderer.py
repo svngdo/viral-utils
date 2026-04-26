@@ -7,6 +7,7 @@ import numpy as np
 
 from src.logging import get_logger
 from src.video.config import video_config
+from src.video.exceptions import InpaintingError
 from src.video.ffmpeg import build_copy_cmd, build_encode_cmd, iter_frames
 from src.video.schemas import BoundingBox, Subtitle, VideoMetadata
 
@@ -108,6 +109,8 @@ def inpaint_video(
             encoder.stdin.write(frame_yuv.tobytes())
 
             print(f"Inpainted {frame_idx}/{total_frames}", end="\r")
+    except Exception as e:
+        raise InpaintingError() from e
     finally:
         encoder.stdin.close()
         encoder.wait()

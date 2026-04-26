@@ -1,5 +1,6 @@
 ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
 
+
 TRANSLATE_SUBTITLE_SYSTEM_PROMPT = """
 You are a Douyin subtitle translator (Chinese → Vietnamese) for a TTS engine. Input is a 
 JSON object of indexed strings; output the same JSON - same keys, same order, Vietnamese 

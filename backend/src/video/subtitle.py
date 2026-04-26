@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -9,6 +8,7 @@ from src.llm.client import LLMClient
 from src.logging import get_logger
 from src.video.config import video_config
 from src.video.constants import TRANSLATE_SUBTITLE_SYSTEM_PROMPT
+from src.video.exceptions import TranslationError
 from src.video.schemas import BoundingBox, Subtitle, VideoMetadata
 
 logger = get_logger(__name__)
@@ -139,7 +139,7 @@ def _to_srt_timestamp(t: float) -> str:
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
-def translate_subtitle(
+async def translate_subtitle(
     subtitles: list[Subtitle],
     llm_client: LLMClient,
 ) -> list[Subtitle]:
@@ -150,16 +150,18 @@ def translate_subtitle(
     text_map = {str(i): s.text.strip() for i, s in enumerate(subtitles)}
     content = json.dumps(text_map, ensure_ascii=False)
 
-    response = llm_client.complete(
-        system_prompt=TRANSLATE_SUBTITLE_SYSTEM_PROMPT,
-        prompt=content,
-    )
+    try:
+        response = await llm_client.generate(
+            instruction=TRANSLATE_SUBTITLE_SYSTEM_PROMPT,
+            prompt=content,
+        )
+    except Exception as e:
+        raise TranslationError() from e
+
     data: dict[str, Any] = json.loads(response)
 
-    logger.info(f"Translated {len(subtitles)} subtitles")
-
     return [
-        replace(s, text=data.get(idx), bbox=replace(s.bbox))
+        s.model_copy(update={"text": data.get(idx)})
         for idx, s in subtitle_map.items()
         if data.get(idx)
     ]
