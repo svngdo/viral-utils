@@ -3,7 +3,7 @@ from typing import Protocol
 from google import genai
 from openai import OpenAI
 from src.config import settings
-from src.llm.exceptions import EmptyResponseError, LLMError, _normalize_error
+from src.llm.exceptions import EmptyResponseError, LLMError, normalize_error
 
 
 class LLMProvider(Protocol):
@@ -48,7 +48,7 @@ class GeminiProvider:
         except LLMError:
             raise
         except Exception as e:
-            raise _normalize_error(e)
+            raise normalize_error(e)
 
 
 class OpenAICompatProvider:
@@ -88,4 +88,4 @@ class OpenAICompatProvider:
         except LLMError:
             raise
         except Exception as e:
-            raise _normalize_error(e)
+            raise normalize_error(e)
