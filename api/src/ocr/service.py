@@ -6,9 +6,13 @@ from collections.abc import Generator
 from pathlib import Path
 
 from src.config import get_settings
+from src.job import service as job_service
+from src.job.schemas import (
+    LogEvent,
+    SSEEvent,
+)
 from src.ocr.engine import OcrEngine
 from src.ocr.schemas import OcrConfig
-from src.shared.schemas import EventStatus, SSEEvent
 from src.subtitle.schemas import Subtitle
 from src.video.engine import VideoEngineProtocol
 
@@ -29,12 +33,13 @@ def extract(
     video_path = Path(video_path)
     subs: list[Subtitle] = []
 
+    job_service.raise_if_cancelled(cancel)
+
     # load cache
     cache = get_settings().cache_dir / video_path.stem / "ocr.json"
     if cache.exists():
         data = cache.read_text(encoding="utf-8")
-        logger.debug("Loaded OCRed subtitles from cache")
-        yield SSEEvent(status=EventStatus.COMPLETED)
+        yield LogEvent(message="Using cached OCR results")
         return [Subtitle(**s) for s in json.loads(data)]
 
     # If not cache run ocr with sampling interval
@@ -42,9 +47,7 @@ def extract(
     frames = video_engine.iter_frames(video_path)
     scanned = 0
     for f in frames:
-        if cancel and cancel.is_set():
-            yield SSEEvent(status=EventStatus.CANCELLED)
-            return []
+        job_service.raise_if_cancelled(cancel)
 
         if f.index % config.sample_interval != 0:
             continue
@@ -53,6 +56,7 @@ def extract(
         # Could removable for cloud GPU
         time.sleep(config.delay)
 
+        job_service.raise_if_cancelled(cancel)
         results = engine.extract(frame=f.data, meta=meta)
         for r in results:
             if config.chinese_only and not _is_chinese(r.text):
@@ -69,20 +73,14 @@ def extract(
             )
         scanned += 1
 
-        yield SSEEvent(
-            status=EventStatus.PROCESSING,
-            message=f"OCRed: {f.index}/{meta.total_frames} frames",
-            progress=int(f.index / meta.total_frames) * 100,
-        )
-
-    logger.debug("OCRed %s frames", scanned)
+        if f.index % (config.sample_interval * 10) == 0:
+            yield LogEvent(message=f"OCR: {f.index}/{meta.total_frames} frames")
 
     # Save cache
+    job_service.raise_if_cancelled(cancel)
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(
         data=json.dumps([s.model_dump() for s in subs], ensure_ascii=False),
         encoding="utf-8",
     )
-    # yield SSEEvent(status=EventStatus.DONE, message=video_path.name)
-    logger.debug("Saved OCRed subtitles cache")
     return subs

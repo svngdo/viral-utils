@@ -8,6 +8,7 @@ from src.config import ensure_app_dirs, settings
 from src.database import init_db
 from src.douyin.router import router as douyin_router
 from src.exceptions import AppException
+from src.job.router import router as job_router
 from src.logging import setup_logging
 from src.platform.router import router as platforms_router
 from src.system.router import router as systems_router
@@ -47,4 +48,5 @@ async def unhandled_error_handler(request: Request, error: Exception) -> JSONRes
 app.include_router(systems_router)
 app.include_router(platforms_router)
 app.include_router(douyin_router)
+app.include_router(job_router)
 app.include_router(video_router)

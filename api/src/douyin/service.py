@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncGenerator
+import threading
+from collections.abc import AsyncGenerator, Awaitable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -27,13 +28,21 @@ from src.douyin.schemas import (
     VideoUpdate,
 )
 from src.download import service as download_service
-from src.shared.schemas import EventStatus, SSEEvent
+from src.job import service as job_service
+from src.job.schemas import (
+    JobStatus,
+    LogEvent,
+    ProgressEvent,
+    SSEEvent,
+    StatusEvent,
+)
 from src.tikhub.client import TikHubClient
 from src.tikhub.exceptions import TikHubError, TikHubStatusError
 from src.tikhub.schemas import AwemeItem
 from src.translation import service as translate_service
 
 logger = logging.getLogger(__name__)
+
 
 # ==============================================================================
 # CRUD
@@ -55,6 +64,23 @@ async def get_users(db: Connection) -> list[UserResponse]:
 # ==============================================================================
 # HELPERS
 # ==============================================================================
+
+
+async def _gather_with_cancel(
+    awaitables: list[Awaitable[Any]],
+    cancel: threading.Event | None = None,
+) -> list[Any]:
+    task = asyncio.gather(*awaitables)
+    try:
+        while not task.done():
+            job_service.raise_if_cancelled(cancel)
+            await asyncio.sleep(0.1)
+
+        return list(await task)
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
 
 def _get_video_urls(video_data: AwemeItem) -> list[str]:
@@ -85,9 +111,8 @@ async def _translate_text(text: str | None) -> str | None:
 async def _translate_video_titles(
     videos: list[dict[str, Any]],
 ) -> list[str | None]:
-    return list(
-        await asyncio.gather(*[_translate_text(video["title"]) for video in videos])
-    )
+    titles = await asyncio.gather(*[_translate_text(video["title"]) for video in videos])
+    return list(titles)
 
 
 def _display_user_name(user: User) -> str:
@@ -138,9 +163,11 @@ async def _insert_videos(
         try:
             await repo.upsert_video(
                 video=VideoCreate(
-                    **video,
-                    translated_title=translated_title,
-                    user_id=user_id,
+                    **{
+                        **video,
+                        "translated_title": translated_title,
+                        "user_id": user_id,
+                    }
                 ),
                 db=db,
             )
@@ -148,16 +175,10 @@ async def _insert_videos(
             logger.error(
                 "Failed to upsert video - aweme_id=%s - %s", video["aweme_id"], e
             )
-            yield SSEEvent(
-                status=EventStatus.FAILED,
-                message=f"Failed to save video {i}/{total}",
-            )
+            yield LogEvent(message=f"Failed to save video {i}/{total}")
             continue
-        yield SSEEvent(
-            status=EventStatus.PROCESSING,
-            message=f"Saved {i}/{total} videos",
-            progress=40 + int((i / total) * 60),
-        )
+        yield LogEvent(message=f"Saved video {i}/{total}")
+        yield ProgressEvent(done=i, total=total)
 
 
 async def fetch_user_latest_videos(
@@ -210,7 +231,8 @@ async def create_user_videos(
     db: Connection,
     tikhub: TikHubClient,
 ) -> AsyncGenerator[SSEEvent]:
-    yield SSEEvent(status=EventStatus.STARTED, message="Fetching user", progress=0)
+    yield StatusEvent(status=JobStatus.RUNNING)
+    yield LogEvent(message="Fetching user")
 
     fetched_user, fetched_videos = await fetch_user_latest_videos(
         sec_uid=user.sec_uid,
@@ -223,15 +245,13 @@ async def create_user_videos(
     if existing:
         raise UserExistsError()
 
-    yield SSEEvent(status=EventStatus.PROCESSING, message="Saving user", progress=20)
+    yield LogEvent(message="Saving user")
     saved = await _insert_user(user=user, fetched_user=fetched_user, db=db)
 
-    yield SSEEvent(
-        status=EventStatus.PROCESSING, message="Translating videos", progress=30
-    )
+    yield LogEvent(message="Translating video titles")
     translated_titles = await _translate_video_titles(fetched_videos)
 
-    yield SSEEvent(status=EventStatus.PROCESSING, message="Saving videos", progress=40)
+    yield LogEvent(message="Saving videos")
     async for event in _insert_videos(
         videos=fetched_videos,
         translated_titles=translated_titles,
@@ -240,24 +260,24 @@ async def create_user_videos(
     ):
         yield event
 
-    yield SSEEvent(
-        status=EventStatus.COMPLETED,
-        message="Done",
-        progress=100,
-        data=UserResponse.model_validate(saved.model_dump()).model_dump(),
-    )
+    yield LogEvent(message="Done")
+    yield StatusEvent(status=JobStatus.COMPLETED)
 
 
 async def _sync_user(
     existing: User,
     fetched_user: dict,
     db: Connection,
+    cancel: threading.Event | None = None,
 ) -> User:
     name = fetched_user["name"]
     translated_name = existing.translated_name
     if name and name != existing.name:
+        job_service.raise_if_cancelled(cancel)
         translated_name = await _translate_text(name)
+        job_service.raise_if_cancelled(cancel)
 
+    job_service.raise_if_cancelled(cancel)
     updated = await repo.update_user_by_id(
         user_id=existing.id,
         user=UserUpdate(
@@ -274,7 +294,10 @@ async def _sync_user_videos(
     existing_user: User,
     fetched_videos: list[dict[str, Any]],
     db: Connection,
+    cancel: threading.Event | None = None,
 ) -> None:
+    job_service.raise_if_cancelled(cancel)
+
     db_videos = await repo.select_videos_by_user_id(user_id=existing_user.id, db=db)
     db_videos_by_aweme_id = {v.aweme_id: v for v in db_videos}
 
@@ -289,15 +312,20 @@ async def _sync_user_videos(
             update_videos.append((existing, video))
 
     # translate new videos in batch
+    job_service.raise_if_cancelled(cancel)
     translated_titles = await _translate_video_titles(new_videos)
+    job_service.raise_if_cancelled(cancel)
 
     for video, translated_title in zip(new_videos, translated_titles, strict=True):
+        job_service.raise_if_cancelled(cancel)
         try:
             await repo.insert_video(
                 video=VideoCreate(
-                    **video,
-                    translated_title=translated_title,
-                    user_id=existing_user.id,
+                    **{
+                        **video,
+                        "translated_title": translated_title,
+                        "user_id": existing_user.id,
+                    }
                 ),
                 db=db,
             )
@@ -309,10 +337,13 @@ async def _sync_user_videos(
             )
 
     for existing_video, video in update_videos:
+        job_service.raise_if_cancelled(cancel)
         title = video["title"]
         translated_title = existing_video.translated_title
         if title and title != existing_video.title:
+            job_service.raise_if_cancelled(cancel)
             translated_title = await _translate_text(title)
+            job_service.raise_if_cancelled(cancel)
         try:
             await repo.update_video_by_id(
                 video_id=existing_video.id,
@@ -335,65 +366,83 @@ async def _sync_user_videos(
 async def fetch_latest_videos(
     db: Connection,
     tikhub: TikHubClient,
+    cancel: threading.Event | None = None,
 ) -> AsyncGenerator[SSEEvent]:
+    job_service.raise_if_cancelled(cancel)
+
     active_users = await repo.select_users_to_fetch(db=db)
+    active_users = active_users[:3]
     total = len(active_users)
 
-    yield SSEEvent(
-        status=EventStatus.STARTED,
-        message="Fetching latest videos",
-        progress=0,
-    )
+    yield StatusEvent(status=JobStatus.RUNNING)
+    yield LogEvent(message="Fetching latest videos")
 
-    results = await asyncio.gather(
-        *[
+    job_service.raise_if_cancelled(cancel)
+
+    results = await _gather_with_cancel(
+        [
             fetch_user_latest_videos(sec_uid=u.sec_uid, tikhub=tikhub)
             for u in active_users
-        ]
+        ],
+        cancel=cancel,
     )
+
+    job_service.raise_if_cancelled(cancel)
 
     for i, (user, (fetched_user, fetched_videos)) in enumerate(
         zip(active_users, results, strict=True), start=1
     ):
+        job_service.raise_if_cancelled(cancel)
+
         if not fetched_user:
             logger.warning("Skip - failed to fetch - sec_uid=%s", user.sec_uid)
             continue
 
-        yield SSEEvent(
-            status=EventStatus.PROCESSING,
-            message=f"Syncing {_display_user_name(user)} {i}/{total}",
-            progress=int((i / total) * 100),
-        )
+        yield LogEvent(message=f"Syncing {_display_user_name(user)}")
+        yield ProgressEvent(done=i, total=total)
 
         existing = await repo.select_user_by_sec_uid(sec_uid=user.sec_uid, db=db)
         if not existing:
             logger.warning("Skip - user not found - sec_uid=%s", user.sec_uid)
             continue
 
-        await _sync_user(existing=existing, fetched_user=fetched_user, db=db)
+        job_service.raise_if_cancelled(cancel)
+
+        await _sync_user(
+            existing=existing,
+            fetched_user=fetched_user,
+            db=db,
+            cancel=cancel,
+        )
+        job_service.raise_if_cancelled(cancel)
+
         await _sync_user_videos(
             existing_user=existing,
             fetched_videos=fetched_videos,
             db=db,
+            cancel=cancel,
         )
 
-    yield SSEEvent(status=EventStatus.COMPLETED, message="Done", progress=100)
+    yield LogEvent(message="Done")
+    yield StatusEvent(status=JobStatus.COMPLETED)
 
 
 async def fetch_user_videos(
     user_id: int,
     db: Connection,
     tikhub: TikHubClient,
+    cancel: threading.Event | None = None,
 ) -> AsyncGenerator[SSEEvent]:
+    job_service.raise_if_cancelled(cancel)
+
     existing = await repo.select_user_by_id(user_id=user_id, db=db)
     if not existing:
         raise UserNotFoundError()
 
-    yield SSEEvent(
-        status=EventStatus.STARTED,
-        message=f"Fetching {_display_user_name(existing)}",
-        progress=0,
-    )
+    yield LogEvent(message=f"Fetching {_display_user_name(existing)}")
+    yield StatusEvent(status=JobStatus.RUNNING)
+
+    job_service.raise_if_cancelled(cancel)
 
     fetched_user, fetched_videos = await fetch_user_latest_videos(
         sec_uid=existing.sec_uid,
@@ -402,22 +451,30 @@ async def fetch_user_videos(
     if not fetched_user:
         raise FetchUserVideosError()
 
-    yield SSEEvent(status=EventStatus.PROCESSING, message="Syncing user", progress=30)
-    synced = await _sync_user(existing=existing, fetched_user=fetched_user, db=db)
+    job_service.raise_if_cancelled(cancel)
 
-    yield SSEEvent(status=EventStatus.PROCESSING, message="Syncing videos", progress=60)
+    yield LogEvent(message="Syncing user")
+    synced = await _sync_user(
+        existing=existing,
+        fetched_user=fetched_user,
+        db=db,
+        cancel=cancel,
+    )
+
+    job_service.raise_if_cancelled(cancel)
+
+    yield LogEvent(message="Syncing videos")
     await _sync_user_videos(
         existing_user=synced,
         fetched_videos=fetched_videos,
         db=db,
+        cancel=cancel,
     )
 
-    yield SSEEvent(
-        status=EventStatus.COMPLETED,
-        message="Done",
-        progress=100,
-        data=UserResponse.model_validate(synced.model_dump()).model_dump(),
-    )
+    job_service.raise_if_cancelled(cancel)
+
+    yield LogEvent(message="Done")
+    yield StatusEvent(status=JobStatus.COMPLETED)
 
 
 async def _get_video_download_path(video: Video, db: Connection) -> Path:
@@ -487,19 +544,13 @@ async def download_video(video: Video, db: Connection) -> tuple[Video, bool]:
 
 
 async def download_latest_videos(db: Connection) -> AsyncGenerator[SSEEvent]:
-    yield SSEEvent(
-        status=EventStatus.STARTED,
-        message="Downloading latest videos",
-        progress=0,
-    )
+    yield StatusEvent(status=JobStatus.RUNNING)
+    yield LogEvent(message="Downloading latest videos")
 
     available_videos = await repo.select_videos_to_download(db=db)
     if not available_videos:
-        yield SSEEvent(
-            status=EventStatus.COMPLETED,
-            message="No videos to download",
-            progress=100,
-        )
+        yield LogEvent(message="No videos to download")
+        yield StatusEvent(status=JobStatus.COMPLETED)
         return
 
     total = len(available_videos)
@@ -517,8 +568,6 @@ async def download_latest_videos(db: Connection) -> AsyncGenerator[SSEEvent]:
         video, result = await coro
 
         completed += 1
-        progress = int((completed / total) * 100)
-
         if video.is_downloaded == result:
             continue
 
@@ -528,14 +577,10 @@ async def download_latest_videos(db: Connection) -> AsyncGenerator[SSEEvent]:
             db=db,
         )
 
-        yield SSEEvent(
-            status=EventStatus.COMPLETED if result else EventStatus.FAILED,
-            message=f"{'Downloaded' if result else 'Failed'}: {_display_video_title(video)}",
-            progress=progress,
+        yield LogEvent(
+            message=f"{'Downloaded' if result else 'Failed'}: {_display_video_title(video)}"
         )
+        yield ProgressEvent(done=completed, total=total)
 
-    yield SSEEvent(
-        status=EventStatus.COMPLETED,
-        message=f"{completed}/{total} videos are downloaded",
-        progress=100,
-    )
+    yield LogEvent(message=f"{completed}/{total} videos are downloaded")
+    yield StatusEvent(status=JobStatus.COMPLETED)

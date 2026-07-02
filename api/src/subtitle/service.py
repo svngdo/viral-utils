@@ -1,12 +1,14 @@
 import json
 import logging
 import time
+from collections.abc import Generator
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from src.config import get_settings
+from src.job.schemas import LogEvent, SSEEvent
 from src.llm import service as llm_service
 from src.llm.schemas import LLMModel
 from src.subtitle.constants import TRANSLATE_SUBTITLES
@@ -133,12 +135,13 @@ def translate(
     video_path: str | Path,
     subtitles: list[Subtitle],
     llm_models: list[LLMModel],
-) -> list[Subtitle]:
+) -> Generator[SSEEvent, None, list[Subtitle]]:
     # Load cache
-    cache = get_settings().cache_dir / Path(video_path).stem / "translated.json"
+    video_path = Path(video_path)
+    cache = get_settings().cache_dir / video_path.stem / "translated.json"
     if cache.exists():
         data = json.loads(cache.read_text(encoding="utf-8"))
-        logger.debug("Loaded translated subtitles from cache")
+        yield LogEvent(message="Using cached translated subtitles")
         return [Subtitle.model_validate(item) for item in data]
 
     subs_map = {str(idx): sub for idx, sub in enumerate(subtitles)}
@@ -169,7 +172,7 @@ def translate(
                 ),
                 encoding="utf-8",
             )
-            logger.debug("Saved translated subtitles cache")
+            yield LogEvent(message="Cached translated subtitles")
 
             return translated_subs
         except Exception as e:
@@ -204,5 +207,3 @@ def write_srt(subtitles: list[Subtitle], srt_path: str | Path) -> None:
     )
     # write subtitle blocks to srt file
     srt_path.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
-
-    logger.debug("Saved subtitles")
