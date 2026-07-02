@@ -20,6 +20,7 @@ from src.tikhub.schemas import UserPostVideosResponse
 
 logger = logging.getLogger(__name__)
 
+
 class TikHubClient:
     def __init__(self):
         self._limiter = TokenBucket(capacity=5, refill_rate=1.0)
@@ -57,7 +58,11 @@ class TikHubClient:
                 return UserPostVideosResponse.model_validate(res.json())
         except httpx.HTTPStatusError as e:
             detail = e.response.text
-            logger.exception("TikHub status error - detail=%s", detail)
+            logger.warning(
+                "TikHub status error - status=%s - detail=%s",
+                e.response.status_code,
+                detail,
+            )
             raise TikHubStatusError(
                 message=f"TikHub returned {e.response.status_code}: {detail}",
                 upstream_status_code=e.response.status_code,

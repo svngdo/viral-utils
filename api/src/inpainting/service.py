@@ -6,7 +6,12 @@ from pathlib import Path
 
 from src.inpainting.engine import InpaintEngineProtocol
 from src.inpainting.schemas import InpaintConfig
-from src.shared.schemas import EventStatus, SSEEvent
+from src.job import service as job_service
+from src.job.exceptions import JobCancelled
+from src.job.schemas import (
+    LogEvent,
+    SSEEvent,
+)
 from src.subtitle.schemas import Subtitle
 from src.video.engine import VideoEngineProtocol
 
@@ -25,38 +30,48 @@ def inpaint(
     video_path = Path(video_path)
     out_path = Path(out_path)
 
+    job_service.raise_if_cancelled(cancel)
+
+    if out_path.exists():
+        yield LogEvent(message=f"File already processed: {out_path}")
+        return
+
     meta = video_engine.get_metadata(video_path)
     subtitles = [s for s in subtitles if s.conf >= config.conf_threshold]
 
     if not subtitles:
+        job_service.raise_if_cancelled(cancel)
         video_engine.copy(video_path, out_path)
-        yield SSEEvent(status=EventStatus.COMPLETED, message="No subtitles found")
+        yield LogEvent(message="No subtitles to inpaint")
         return
 
+    job_service.raise_if_cancelled(cancel)
     encoder = video_engine.get_encoder(path=video_path, out_path=out_path)
 
     if encoder.stdin is None:
         raise BrokenPipeError("ffmpeg encoder failed to open stdin pipe")
     try:
         for frame in video_engine.iter_frames(video_path):
-            if cancel and cancel.is_set():
+            try:
+                job_service.raise_if_cancelled(cancel)
+            except JobCancelled:
                 encoder.kill()
-                yield SSEEvent(status=EventStatus.CANCELLED)
-                return
+                raise
 
             active = [s for s in subtitles if s.start <= frame.timestamp <= s.end]
             data = frame.data
 
             if active:
+                job_service.raise_if_cancelled(cancel)
                 data = engine.inpaint(frame.data, bboxes=[s.bbox for s in active])
 
+            job_service.raise_if_cancelled(cancel)
             encoder.stdin.write(data.tobytes())
 
-            yield SSEEvent(
-                status=EventStatus.PROCESSING,
-                message=f"Inpainting {frame.index}/{meta.total_frames} frames",
-                progress=int((frame.index / meta.total_frames) * 100),
-            )
+            if frame.index % 10 == 0:
+                yield LogEvent(
+                    message=f"Inpainting: {frame.index}/{meta.total_frames} frames"
+                )
 
             # Throttle to keep device cool
             time.sleep(config.delay)
@@ -71,4 +86,5 @@ def inpaint(
             )
             raise RuntimeError(f"ffmpeg encode failed: {err}")
 
-    yield SSEEvent(status=EventStatus.COMPLETED, message=str(out_path))
+    yield LogEvent(message=f"Saved processed video: {out_path}")
+    yield LogEvent(message="Inpainting completed")

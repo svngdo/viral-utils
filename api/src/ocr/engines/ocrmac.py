@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 class Ocrmac(OcrEngine):
     def __init__(self) -> None:
         self._engine = ocrmac
-        logger.debug("Using ocrmac (Apple Vision ANE)")
 
     def _vision_box_to_bbox(
         self,

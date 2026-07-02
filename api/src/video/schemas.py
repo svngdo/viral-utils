@@ -62,10 +62,16 @@ class ProcessVideosRequest(BaseModel):
 
     @field_validator("in_dir")
     @classmethod
-    def input_required(cls, v):
-        if not Path(v).exists():
-            raise ValueError(f"input directory does not exist: {v}")
-        return v
+    def input_required(cls, v: str) -> str:
+        path = Path(v).expanduser()
+        if not path.exists():
+            raise ValueError(f"input directory does not exist: {path}")
+        return str(path)
+
+    @field_validator("out_dir")
+    @classmethod
+    def normalize_out_dir(cls, v: str) -> str:
+        return str(Path(v).expanduser())
 
     @field_validator("llm_models")
     @classmethod

@@ -16,9 +16,7 @@ export default function Home() {
           <CardTitle>Workspace</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            The Douyin page now contains only user and video CRUD flows.
-          </p>
+          <p className="text-sm text-muted-foreground">Viral Utils Workspace</p>
         </CardContent>
       </Card>
     </Page>

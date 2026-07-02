@@ -15,22 +15,22 @@ from src.video.engines.ffmpeg import FFmpeg
 from src.video.schemas import ProcessVideosRequest, VideoConfig, VideoEngine
 
 
-def get_video_engine(request: ProcessVideosRequest) -> VideoEngineProtocol:
+def get_video_engine(payload: ProcessVideosRequest) -> VideoEngineProtocol:
     config = VideoConfig(
-        codec=request.video_codec,
-        quality=request.video_quality,
+        codec=payload.video_codec,
+        quality=payload.video_quality,
     )
-    match request.video_engine:
+    match payload.video_engine:
         case VideoEngine.FFMPEG:
             return FFmpeg(config)
         case _:
             raise HTTPException(
-                status_code=400, detail=f"Unknown video engine: {request.video_engine}"
+                status_code=400, detail=f"Unknown video engine: {payload.video_engine}"
             )
 
 
-def get_ocr_engine(request: ProcessVideosRequest) -> OcrEngine:
-    match request.ocr_engine:
+def get_ocr_engine(payload: ProcessVideosRequest) -> OcrEngine:
+    match payload.ocr_engine:
         case "ocrmac":
             return Ocrmac()
         case "paddleocr":
@@ -38,53 +38,53 @@ def get_ocr_engine(request: ProcessVideosRequest) -> OcrEngine:
         case _:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown OCR engine: {request.ocr_engine}",
+                detail=f"Unknown OCR engine: {payload.ocr_engine}",
             )
 
 
-def get_ocr_config(request: ProcessVideosRequest) -> OcrConfig:
+def get_ocr_config(payload: ProcessVideosRequest) -> OcrConfig:
     return OcrConfig(
-        sample_interval=request.ocr_sample_interval,
-        delay=request.ocr_delay,
-        chinese_only=request.ocr_chinese_only,
+        sample_interval=payload.ocr_sample_interval,
+        delay=payload.ocr_delay,
+        chinese_only=payload.ocr_chinese_only,
     )
 
 
-def get_subtitle_config(request: ProcessVideosRequest) -> SubtitleConfig:
+def get_subtitle_config(payload: ProcessVideosRequest) -> SubtitleConfig:
     return SubtitleConfig(
-        time_gap_tolerance=request.sub_time_gap_tolerance,
-        text_similarity_threshold=request.sub_text_similarity_threshold,
-        box_iou_threshold=request.sub_box_iou_threshold,
-        frame_padding=request.sub_frame_padding,
+        time_gap_tolerance=payload.sub_time_gap_tolerance,
+        text_similarity_threshold=payload.sub_text_similarity_threshold,
+        box_iou_threshold=payload.sub_box_iou_threshold,
+        frame_padding=payload.sub_frame_padding,
     )
 
 
-def get_inpaint_engine(request: ProcessVideosRequest) -> InpaintEngineProtocol:
+def get_inpaint_engine(payload: ProcessVideosRequest) -> InpaintEngineProtocol:
     config = InpaintConfig(
-        conf_threshold=request.inpaint_conf_threshold,
-        scale=request.inpaint_scale,
-        expand=request.inpaint_expand,
-        radius=request.inpaint_radius,
-        delay=request.inpaint_delay,
+        conf_threshold=payload.inpaint_conf_threshold,
+        scale=payload.inpaint_scale,
+        expand=payload.inpaint_expand,
+        radius=payload.inpaint_radius,
+        delay=payload.inpaint_delay,
     )
-    match request.inpaint_engine:
+    match payload.inpaint_engine:
         case InpaintEngine.OPENCV:
             return OpenCV(config)
         # TODO: add lama
         case _:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown inpaint engine: {request.inpaint_engine}",
+                detail=f"Unknown inpaint engine: {payload.inpaint_engine}",
             )
 
 
-def get_inpaint_config(request: ProcessVideosRequest) -> InpaintConfig:
+def get_inpaint_config(payload: ProcessVideosRequest) -> InpaintConfig:
     return InpaintConfig(
-        conf_threshold=request.inpaint_conf_threshold,
-        scale=request.inpaint_scale,
-        expand=request.inpaint_expand,
-        radius=request.inpaint_radius,
-        delay=request.inpaint_delay,
+        conf_threshold=payload.inpaint_conf_threshold,
+        scale=payload.inpaint_scale,
+        expand=payload.inpaint_expand,
+        radius=payload.inpaint_radius,
+        delay=payload.inpaint_delay,
     )
 
 
