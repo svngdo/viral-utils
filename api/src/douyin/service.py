@@ -371,7 +371,6 @@ async def fetch_latest_videos(
     job_service.raise_if_cancelled(cancel)
 
     active_users = await repo.select_users_to_fetch(db=db)
-    active_users = active_users[:3]
     total = len(active_users)
 
     yield StatusEvent(status=JobStatus.RUNNING)
@@ -439,8 +438,70 @@ async def fetch_user_videos(
     if not existing:
         raise UserNotFoundError()
 
-    yield LogEvent(message=f"Fetching {_display_user_name(existing)}")
     yield StatusEvent(status=JobStatus.RUNNING)
+
+    async for event in _fetch_and_sync_user_videos(
+        existing=existing,
+        db=db,
+        tikhub=tikhub,
+        cancel=cancel,
+    ):
+        yield event
+
+    yield LogEvent(message="Done")
+    yield StatusEvent(status=JobStatus.COMPLETED)
+
+
+async def fetch_selected_user_videos(
+    user_ids: list[int],
+    db: Connection,
+    tikhub: TikHubClient,
+    cancel: threading.Event | None = None,
+) -> AsyncGenerator[SSEEvent]:
+    job_service.raise_if_cancelled(cancel)
+
+    yield StatusEvent(status=JobStatus.RUNNING)
+    yield LogEvent(message="Fetching selected users")
+
+    total = len(user_ids)
+    completed = 0
+
+    for user_id in user_ids:
+        job_service.raise_if_cancelled(cancel)
+
+        existing = await repo.select_user_by_id(user_id=user_id, db=db)
+        if not existing:
+            yield LogEvent(message=f"Skipping missing user {user_id}")
+            completed += 1
+            yield ProgressEvent(done=completed, total=total)
+            continue
+
+        try:
+            async for event in _fetch_and_sync_user_videos(
+                existing=existing,
+                db=db,
+                tikhub=tikhub,
+                cancel=cancel,
+            ):
+                yield event
+        except FetchUserVideosError:
+            logger.warning("Skip - failed to fetch - user_id=%s", user_id)
+            yield LogEvent(message=f"Failed to fetch {_display_user_name(existing)}")
+
+        completed += 1
+        yield ProgressEvent(done=completed, total=total)
+
+    yield LogEvent(message="Done")
+    yield StatusEvent(status=JobStatus.COMPLETED)
+
+
+async def _fetch_and_sync_user_videos(
+    existing: User,
+    db: Connection,
+    tikhub: TikHubClient,
+    cancel: threading.Event | None = None,
+) -> AsyncGenerator[SSEEvent]:
+    yield LogEvent(message=f"Fetching {_display_user_name(existing)}")
 
     job_service.raise_if_cancelled(cancel)
 
@@ -472,9 +533,6 @@ async def fetch_user_videos(
     )
 
     job_service.raise_if_cancelled(cancel)
-
-    yield LogEvent(message="Done")
-    yield StatusEvent(status=JobStatus.COMPLETED)
 
 
 async def _get_video_download_path(video: Video, db: Connection) -> Path:

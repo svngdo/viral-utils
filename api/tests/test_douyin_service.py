@@ -1,6 +1,9 @@
 import asyncio
 
-from src.douyin.service import fetch_user_latest_videos
+import pytest
+
+from src.douyin.schemas import User, UserStatus
+from src.douyin.service import fetch_selected_user_videos, fetch_user_latest_videos
 from src.tikhub.exceptions import TikHubRequestError, TikHubStatusError
 
 
@@ -46,3 +49,61 @@ def test_fetch_user_latest_videos_does_not_retry_bad_request():
         assert videos == []
 
     asyncio.run(run())
+
+
+@pytest.mark.anyio
+async def test_fetch_selected_user_videos_emits_progress_per_user(monkeypatch):
+    users = {
+        1: User(
+            id=1,
+            sec_uid="sec-1",
+            name="User 1",
+            status=UserStatus.ACTIVE,
+            created_at=1,
+            updated_at=1,
+        ),
+        2: User(
+            id=2,
+            sec_uid="sec-2",
+            name="User 2",
+            status=UserStatus.ACTIVE,
+            created_at=1,
+            updated_at=1,
+        ),
+    }
+    synced_user_ids = []
+
+    async def select_user_by_id(user_id, db):
+        return users[user_id]
+
+    async def fetch_latest(sec_uid, tikhub):
+        return {"name": f"Fetched {sec_uid}"}, []
+
+    async def sync_user(existing, fetched_user, db, cancel=None):
+        synced_user_ids.append(existing.id)
+        return existing
+
+    async def sync_user_videos(existing_user, fetched_videos, db, cancel=None):
+        return None
+
+    monkeypatch.setattr("src.douyin.service.repo.select_user_by_id", select_user_by_id)
+    monkeypatch.setattr("src.douyin.service.fetch_user_latest_videos", fetch_latest)
+    monkeypatch.setattr("src.douyin.service._sync_user", sync_user)
+    monkeypatch.setattr("src.douyin.service._sync_user_videos", sync_user_videos)
+
+    events = [
+        event
+        async for event in fetch_selected_user_videos(
+            user_ids=[1, 2],
+            db=None,
+            tikhub=None,
+        )
+    ]
+
+    assert synced_user_ids == [1, 2]
+    progress = [event for event in events if event.type == "progress"]
+    assert [(event.done, event.total) for event in progress] == [(1, 2), (2, 2)]
+    assert events[0].type == "status"
+    assert events[0].status == "running"
+    assert events[-1].type == "status"
+    assert events[-1].status == "completed"

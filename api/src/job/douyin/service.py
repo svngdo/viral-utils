@@ -38,3 +38,21 @@ async def run_fetch_user_videos_job(
             cancel=jobs[job_id].cancel,
         ),
     )
+
+
+async def run_fetch_selected_user_videos_job(
+    job_id: str,
+    user_ids: list[int],
+    db: Connection,
+    tikhub: TikHubClient,
+) -> None:
+    """Background job entrypoint for fetching videos from selected Douyin users."""
+    await job_service._run_async_job(
+        job_id=job_id,
+        events=douyin_service.fetch_selected_user_videos(
+            user_ids=user_ids,
+            db=db,
+            tikhub=tikhub,
+            cancel=jobs[job_id].cancel,
+        ),
+    )
