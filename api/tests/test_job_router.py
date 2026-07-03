@@ -8,11 +8,14 @@ def test_job_routes_are_registered():
         if hasattr(route, "methods") and route.path.startswith("/jobs")
     }
 
-    assert "/jobs/fetch-latest-videos" in paths
-    assert "/jobs/users/{user_id}/fetch-videos" in paths
+    assert "/jobs/douyin/fetch-latest-videos" in paths
+    assert "/jobs/douyin/users/{user_id}/fetch-videos" in paths
+    assert "/jobs/video/process-videos" in paths
     assert "/jobs/{job_id}" in paths
     assert "/jobs/{job_id}/cancel" in paths
     assert "/jobs/{job_id}/events" in paths
+    assert "/jobs/fetch-latest-videos" not in paths
+    assert "/jobs/process-videos" not in paths
 
 
 def test_legacy_stream_cancel_route_is_not_registered():

@@ -6,9 +6,11 @@ export default function Video() {
   const {
     fetchEvents,
     handleFetchLatestVideos,
+    handleCancelFetchLatestVideos,
     processEvents,
     handleProcessVideos,
     handleCancelProcessVideos,
+    isFetchRunning,
     isProcessRunning,
   } = useVideoJob();
 
@@ -26,8 +28,10 @@ export default function Video() {
           fetchEvents={fetchEvents}
           processEvents={processEvents}
           onFetchLatestVideos={handleFetchLatestVideos}
+          onCancelFetchLatestVideos={handleCancelFetchLatestVideos}
           onProcessVideos={handleProcessVideos}
           onCancelProcessVideos={handleCancelProcessVideos}
+          isFetchRunning={isFetchRunning}
           isProcessRunning={isProcessRunning}
         />
       </PageContent>

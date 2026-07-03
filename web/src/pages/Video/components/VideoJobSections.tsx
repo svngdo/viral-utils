@@ -6,8 +6,10 @@ interface VideoJobSectionsProps {
   fetchEvents: JobEvent[];
   processEvents: JobEvent[];
   onFetchLatestVideos: () => void;
+  onCancelFetchLatestVideos: () => void;
   onProcessVideos: () => void;
   onCancelProcessVideos: () => void;
+  isFetchRunning: boolean;
   isProcessRunning: boolean;
 }
 
@@ -15,8 +17,10 @@ export default function VideoJobSections({
   fetchEvents,
   processEvents,
   onFetchLatestVideos,
+  onCancelFetchLatestVideos,
   onProcessVideos,
   onCancelProcessVideos,
+  isFetchRunning,
   isProcessRunning,
 }: VideoJobSectionsProps) {
   return (
@@ -29,6 +33,11 @@ export default function VideoJobSections({
         unit="videos fetched"
         events={fetchEvents}
         onAction={onFetchLatestVideos}
+        actionDisabled={isFetchRunning}
+        cancelLabel="Cancel"
+        cancelIcon={<Square />}
+        onCancel={onCancelFetchLatestVideos}
+        cancelVisible={isFetchRunning}
       />
 
       <JobSection

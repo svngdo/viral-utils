@@ -3,21 +3,62 @@ import * as jobApi from "@/pages/Video/api";
 import type { JobEvent } from "@/pages/Video/types";
 
 export default function useVideoJob() {
-  const [fetchEvents] = useState<JobEvent[]>([]);
+  const [fetchEvents, setFetchEvents] = useState<JobEvent[]>([]);
   const [processEvents, setProcessEvents] = useState<JobEvent[]>([]);
+  const [fetchJobId, setFetchJobId] = useState<string | null>(null);
   const [processJobId, setProcessJobId] = useState<string | null>(null);
+  const fetchEventSourceRef = useRef<EventSource | null>(null);
   const processEventSourceRef = useRef<EventSource | null>(null);
+
+  const closeFetchEventSource = useCallback(() => {
+    fetchEventSourceRef.current?.close();
+    fetchEventSourceRef.current = null;
+  }, []);
 
   const closeProcessEventSource = useCallback(() => {
     processEventSourceRef.current?.close();
     processEventSourceRef.current = null;
   }, []);
 
-  useEffect(() => closeProcessEventSource, [closeProcessEventSource]);
+  useEffect(
+    () => () => {
+      closeFetchEventSource();
+      closeProcessEventSource();
+    },
+    [closeFetchEventSource, closeProcessEventSource],
+  );
 
   const handleFetchLatestVideos = async () => {
+    closeFetchEventSource();
     const job = await jobApi.create_fetch_latest_videos_job();
-    console.log(job);
+    setFetchEvents([
+      {
+        id: `fetch-started-${job.id}`,
+        type: "status",
+        status: "running",
+      },
+    ]);
+    setFetchJobId(job.id);
+    const evtSource = new EventSource(job.events_url);
+    fetchEventSourceRef.current = evtSource;
+
+    evtSource.onmessage = (event) => {
+      const jobEvent = JSON.parse(event.data) as JobEvent;
+      setFetchEvents((events) => [...events, jobEvent]);
+
+      if (
+        jobEvent.type === "status" &&
+        ["completed", "failed", "cancelled"].includes(jobEvent.status)
+      ) {
+        closeFetchEventSource();
+        setFetchJobId(null);
+      }
+    };
+
+    evtSource.onerror = () => {
+      closeFetchEventSource();
+      setFetchJobId(null);
+    };
   };
 
   const handleProcessVideos = async () => {
@@ -71,12 +112,32 @@ export default function useVideoJob() {
     ]);
   };
 
+  const handleCancelFetchLatestVideos = async () => {
+    if (!fetchJobId) return;
+    const job = await jobApi.cancel_job(fetchJobId);
+    setFetchEvents((events) => [
+      ...events,
+      {
+        id: `cancel-requested-${fetchJobId}`,
+        type: "log",
+        message: "Cancel requested.",
+      },
+      {
+        id: `cancel-status-${fetchJobId}`,
+        type: "status",
+        status: job.status,
+      },
+    ]);
+  };
+
   return {
     fetchEvents,
     handleFetchLatestVideos,
+    handleCancelFetchLatestVideos,
     processEvents,
     handleProcessVideos,
     handleCancelProcessVideos,
+    isFetchRunning: Boolean(fetchJobId),
     isProcessRunning: Boolean(processJobId),
   };
 }

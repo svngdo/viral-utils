@@ -4,12 +4,8 @@ from asyncio import AbstractEventLoop
 from collections.abc import AsyncIterable, Iterable
 from uuid import uuid4
 
-from aiosqlite import Connection
 from starlette.concurrency import run_in_threadpool
 
-from src.douyin import service as douyin_service
-from src.inpainting.engine import InpaintEngineProtocol
-from src.inpainting.schemas import InpaintConfig
 from src.job.exceptions import JobCancelled
 from src.job.schemas import (
     JobStatus,
@@ -18,14 +14,6 @@ from src.job.schemas import (
     StatusEvent,
 )
 from src.job.state import JobState, jobs
-from src.llm.schemas import LLMModel
-from src.ocr.engine import OcrEngine
-from src.ocr.schemas import OcrConfig
-from src.subtitle.schemas import SubtitleConfig
-from src.tikhub.client import TikHubClient
-from src.video import service as video_service
-from src.video.engine import VideoEngineProtocol
-from src.video.schemas import ProcessVideosRequest
 
 logger = logging.getLogger(__name__)
 
@@ -171,67 +159,3 @@ async def _run_sync_job(job_id: str, events: Iterable[SSEEvent]) -> None:
         await _emit_failed(state, e)
     finally:
         await _complete_job(state)
-
-
-async def run_fetch_latest_videos_job(
-    job_id: str,
-    db: Connection,
-    tikhub: TikHubClient,
-) -> None:
-    """Background job entrypoint for fetching latest Douyin videos."""
-
-    await _run_async_job(
-        job_id=job_id,
-        events=douyin_service.fetch_latest_videos(
-            db=db,
-            tikhub=tikhub,
-            cancel=jobs[job_id].cancel,
-        ),
-    )
-
-
-async def run_fetch_user_videos_job(
-    job_id: str,
-    user_id: int,
-    db: Connection,
-    tikhub: TikHubClient,
-) -> None:
-    """Background job entrypoint for fetching videos from one Douyin user."""
-    await _run_async_job(
-        job_id=job_id,
-        events=douyin_service.fetch_user_videos(
-            user_id=user_id,
-            db=db,
-            tikhub=tikhub,
-            cancel=jobs[job_id].cancel,
-        ),
-    )
-
-
-async def run_process_videos_job(
-    job_id: str,
-    request: ProcessVideosRequest,
-    video_engine: VideoEngineProtocol,
-    ocr_engine: OcrEngine,
-    ocr_config: OcrConfig,
-    subtitle_config: SubtitleConfig,
-    inpaint_engine: InpaintEngineProtocol,
-    inpaint_config: InpaintConfig,
-    llm_models: list[LLMModel],
-) -> None:
-    """Background job entrypoint for the sync video processing pipeline."""
-    state = jobs[job_id]
-    await _run_sync_job(
-        job_id=job_id,
-        events=video_service.process(
-            request=request,
-            video_engine=video_engine,
-            ocr_engine=ocr_engine,
-            ocr_config=ocr_config,
-            subtitle_config=subtitle_config,
-            inpaint_engine=inpaint_engine,
-            inpaint_config=inpaint_config,
-            llm_models=llm_models,
-            cancel=state.cancel,
-        ),
-    )
