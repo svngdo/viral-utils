@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as douyinJobApi from "@/pages/Douyin/api";
 import * as jobApi from "@/pages/Video/api";
 import type { JobEvent } from "@/pages/Video/types";
 
@@ -30,7 +31,7 @@ export default function useVideoJob() {
 
   const handleFetchLatestVideos = async () => {
     closeFetchEventSource();
-    const job = await jobApi.create_fetch_latest_videos_job();
+    const job = await douyinJobApi.createFetchActiveUsersJob();
     setFetchEvents([
       {
         id: `fetch-started-${job.id}`,
@@ -63,7 +64,7 @@ export default function useVideoJob() {
 
   const handleProcessVideos = async () => {
     closeProcessEventSource();
-    const job = await jobApi.create_process_videos_job();
+    const job = await jobApi.createProcessVideosJob();
     setProcessEvents([
       {
         id: `process-started-${job.id}`,
@@ -96,7 +97,7 @@ export default function useVideoJob() {
 
   const handleCancelProcessVideos = async () => {
     if (!processJobId) return;
-    const job = await jobApi.cancel_job(processJobId);
+    const job = await jobApi.cancelJob(processJobId);
     setProcessEvents((events) => [
       ...events,
       {
@@ -114,7 +115,7 @@ export default function useVideoJob() {
 
   const handleCancelFetchLatestVideos = async () => {
     if (!fetchJobId) return;
-    const job = await jobApi.cancel_job(fetchJobId);
+    const job = await jobApi.cancelJob(fetchJobId);
     setFetchEvents((events) => [
       ...events,
       {
