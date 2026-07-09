@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiAbsoluteUrl } from "@/lib/api";
 import * as douyinJobApi from "@/pages/Douyin/api";
 import * as jobApi from "@/pages/Video/api";
 import type { JobEvent } from "@/pages/Video/types";
@@ -40,7 +41,7 @@ export default function useVideoJob() {
       },
     ]);
     setFetchJobId(job.id);
-    const evtSource = new EventSource(job.events_url);
+    const evtSource = new EventSource(apiAbsoluteUrl(job.events_url));
     fetchEventSourceRef.current = evtSource;
 
     evtSource.onmessage = (event) => {
@@ -73,7 +74,7 @@ export default function useVideoJob() {
       },
     ]);
     setProcessJobId(job.id);
-    const evtSource = new EventSource(job.events_url);
+    const evtSource = new EventSource(apiAbsoluteUrl(job.events_url));
     processEventSourceRef.current = evtSource;
 
     evtSource.onmessage = (event) => {

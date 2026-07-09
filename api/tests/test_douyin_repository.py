@@ -15,7 +15,9 @@ from src.douyin.repository import (
     select_videos_by_user_id,
     select_videos_page,
     select_videos_to_download,
+    select_videos_to_download_by_user_ids,
     update_video_by_id,
+    upsert_video,
 )
 from src.douyin.schemas import UserCreate, VideoCreate, VideoUpdate
 
@@ -166,6 +168,58 @@ def test_video_update_persists_metadata_and_download_selection(tmp_path):
     asyncio.run(run())
 
 
+def test_upsert_video_preserves_existing_download_state(tmp_path):
+    async def run():
+        db = await _connect_db(tmp_path)
+        try:
+            user = await insert_user(UserCreate(sec_uid="user-1", status="active"), db)
+            assert user is not None
+
+            video = await insert_video(
+                VideoCreate(
+                    aweme_id="video-1",
+                    title="old title",
+                    translated_title="old translated",
+                    create_time=1,
+                    digg_count=1,
+                    duration=10,
+                    urls='["old"]',
+                    is_downloaded=True,
+                    user_id=user.id,
+                ),
+                db,
+            )
+            assert video is not None
+
+            upserted = await upsert_video(
+                VideoCreate(
+                    aweme_id="video-1",
+                    title="new title",
+                    translated_title="new translated",
+                    create_time=2,
+                    digg_count=99,
+                    duration=20,
+                    urls='["new"]',
+                    is_downloaded=False,
+                    user_id=user.id,
+                ),
+                db,
+            )
+
+            assert upserted is not None
+            assert upserted.title == "new title"
+            assert upserted.translated_title == "new translated"
+            assert upserted.create_time == 2
+            assert upserted.digg_count == 99
+            assert upserted.duration == 20
+            assert upserted.urls == '["new"]'
+            assert upserted.is_downloaded is True
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 def test_select_videos_page_orders_by_create_time_and_id(tmp_path):
     async def run():
         db = await _connect_db(tmp_path)
@@ -200,6 +254,56 @@ def test_select_videos_page_orders_by_create_time_and_id(tmp_path):
 
             assert [video.aweme_id for video in first_page] == ["newest", "newer-b"]
             assert [video.aweme_id for video in second_page] == ["newer-a", "old"]
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+def test_select_videos_to_download_by_user_ids_filters_selected_pending_videos(
+    tmp_path,
+):
+    async def run():
+        db = await _connect_db(tmp_path)
+        try:
+            selected_user = await insert_user(
+                UserCreate(sec_uid="selected", status="dropped"),
+                db,
+            )
+            other_user = await insert_user(
+                UserCreate(sec_uid="other", status="active"),
+                db,
+            )
+            assert selected_user is not None
+            assert other_user is not None
+
+            for aweme_id, user_id, is_downloaded in [
+                ("selected-pending", selected_user.id, False),
+                ("selected-downloaded", selected_user.id, True),
+                ("other-pending", other_user.id, False),
+            ]:
+                video = await insert_video(
+                    VideoCreate(
+                        aweme_id=aweme_id,
+                        title=None,
+                        translated_title=None,
+                        create_time=1,
+                        digg_count=1,
+                        duration=None,
+                        urls=None,
+                        is_downloaded=is_downloaded,
+                        user_id=user_id,
+                    ),
+                    db,
+                )
+                assert video is not None
+
+            videos = await select_videos_to_download_by_user_ids(
+                [selected_user.id],
+                db,
+            )
+
+            assert [video.aweme_id for video in videos] == ["selected-pending"]
         finally:
             await db.close()
 

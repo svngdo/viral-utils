@@ -1,20 +1,11 @@
 import { AlertCircle } from "lucide-react";
-import {
-  Page,
-  PageHeader,
-  PageSubtitle,
-  PageTabs,
-  PageTitle,
-  PageToolbar,
-} from "@/components/Page";
-import SearchInput from "@/components/SearchInput";
+import { Page } from "@/components/Page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import CreateUserDialog from "@/pages/Douyin/components/CreateUserDialog";
-import DeleteVideoDialog from "@/pages/Douyin/components/DeleteVideoDialog";
-import EditVideoDialog from "@/pages/Douyin/components/EditVideoDialog";
+import DouyinPageHeader from "@/pages/Douyin/components/DouyinPageHeader";
+import DouyinTabs from "@/pages/Douyin/components/DouyinTabs";
+import DouyinToolbar from "@/pages/Douyin/components/DouyinToolbar";
+import DouyinVideosPanel from "@/pages/Douyin/components/DouyinVideosPanel";
 import UserTable from "@/pages/Douyin/components/UserTable";
-import VideoTable from "@/pages/Douyin/components/VideoTable";
 import useDouyinPage from "@/pages/Douyin/hooks/useDouyinPage";
 
 export default function Douyin() {
@@ -28,35 +19,56 @@ export default function Douyin() {
     filteredUsers,
     filteredVideos,
     firstVideoNumber,
+    allVisibleUsersSelected,
+    handleCancelDownloadJob,
+    handleCancelFetchJob,
     handleCreateUser,
     handleDeleteUser,
     handleDeleteVideo,
+    handleDownloadActiveVideos,
+    handleDownloadSelectedUsers,
+    handleFetchActiveUsers,
+    handleFetchSelectedUsers,
     handleNextVideoPage,
     handlePreviousVideoPage,
+    handleToggleAllVisibleUsers,
+    handleToggleUserSelected,
     handleUpdateUser,
     handleUpdateVideo,
+    isDownloadJobRunning,
+    isFetchJobRunning,
     lastVideoNumber,
     loading,
     setActiveTab,
     setDeletingVideo,
     setEditingVideo,
     setUserSearchQuery,
+    setUserSystemFilter,
+    setUserStatusFilter,
     setVideoSearchQuery,
+    selectedUserCount,
+    selectedUserIds,
+    someVisibleUsersSelected,
+    downloadJobScope,
+    downloadEvents,
+    syncJobScope,
+    syncEvents,
     statuses,
-    systemNameById,
     systems,
     userNameById,
     users,
     userSearchQuery,
+    userSystemFilter,
+    userStatusFilter,
     videoSearchQuery,
     videoTotal,
     videos,
     videosLoading,
   } = useDouyinPage();
-  const activeSearchQuery = activeTab === "users" ? userSearchQuery : videoSearchQuery;
   const pageSubtitle = loading
     ? "Loading..."
-    : activeTab === "users" && userSearchQuery
+    : activeTab === "users" &&
+        (userSearchQuery || userStatusFilter !== "all" || userSystemFilter !== "all")
       ? `${filteredUsers.length} of ${users.length} users, ${videoTotal} videos`
       : activeTab === "videos" && videoSearchQuery
         ? `${users.length} users, ${filteredVideos.length} of ${videos.length} videos on this page`
@@ -71,15 +83,13 @@ export default function Douyin() {
 
   return (
     <Page>
-      <PageHeader>
-        <div>
-          <PageTitle>Douyin</PageTitle>
-          <PageSubtitle>{pageSubtitle}</PageSubtitle>
-        </div>
-        {activeTab === "users" && (
-          <CreateUserDialog systems={systems} statuses={statuses} onSubmit={handleCreateUser} />
-        )}
-      </PageHeader>
+      <DouyinPageHeader
+        activeTab={activeTab}
+        subtitle={pageSubtitle}
+        systems={systems}
+        statuses={statuses}
+        onCreateUser={handleCreateUser}
+      />
 
       {displayError && (
         <Alert variant="destructive" className="mb-6">
@@ -89,81 +99,72 @@ export default function Douyin() {
         </Alert>
       )}
 
-      <PageTabs>
-        <Button
-          type="button"
-          variant={activeTab === "users" ? "secondary" : "ghost"}
-          onClick={() => setActiveTab("users")}
-        >
-          Users
-        </Button>
-        <Button
-          type="button"
-          variant={activeTab === "videos" ? "secondary" : "ghost"}
-          onClick={() => setActiveTab("videos")}
-        >
-          Videos
-        </Button>
-      </PageTabs>
+      <DouyinTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <PageToolbar>
-        <SearchInput
-          value={activeSearchQuery}
-          onChange={activeTab === "users" ? setUserSearchQuery : setVideoSearchQuery}
-          placeholder={activeTab === "users" ? "Search users" : "Search current video page"}
-          className="w-full"
-        />
-      </PageToolbar>
+      <DouyinToolbar
+        activeTab={activeTab}
+        downloadEvents={downloadEvents}
+        downloadJobScope={downloadJobScope}
+        isDownloadJobRunning={isDownloadJobRunning}
+        isFetchJobRunning={isFetchJobRunning}
+        loading={loading}
+        selectedUserCount={selectedUserCount}
+        syncEvents={syncEvents}
+        syncJobScope={syncJobScope}
+        systems={systems}
+        statuses={statuses}
+        userSearchQuery={userSearchQuery}
+        userSystemFilter={userSystemFilter}
+        userStatusFilter={userStatusFilter}
+        videoSearchQuery={videoSearchQuery}
+        onCancelDownloadJob={handleCancelDownloadJob}
+        onCancelFetchJob={handleCancelFetchJob}
+        onDownloadActiveVideos={handleDownloadActiveVideos}
+        onDownloadSelectedUsers={handleDownloadSelectedUsers}
+        onFetchActiveUsers={handleFetchActiveUsers}
+        onFetchSelectedUsers={handleFetchSelectedUsers}
+        onUserSearchChange={setUserSearchQuery}
+        onUserSystemFilterChange={setUserSystemFilter}
+        onUserStatusFilterChange={setUserStatusFilter}
+        onVideoSearchChange={setVideoSearchQuery}
+      />
 
       {activeTab === "users" ? (
         <UserTable
           users={filteredUsers}
           systems={systems}
           statuses={statuses}
-          systemNameById={systemNameById}
           loading={loading}
+          selectedUserIds={selectedUserIds}
+          allVisibleUsersSelected={allVisibleUsersSelected}
+          someVisibleUsersSelected={someVisibleUsersSelected}
+          fetchDisabled={isFetchJobRunning}
+          onToggleSelected={handleToggleUserSelected}
+          onToggleAllVisible={handleToggleAllVisibleUsers}
           onUpdate={handleUpdateUser}
           onDelete={handleDeleteUser}
         />
       ) : (
-        <>
-          <VideoTable
-            videos={filteredVideos}
-            videoTotal={displayedVideoTotal}
-            firstVideoNumber={displayedFirstVideoNumber}
-            lastVideoNumber={displayedLastVideoNumber}
-            canGoPrevious={canGoPrevious}
-            canGoNext={canGoNext}
-            loading={loading}
-            videosLoading={videosLoading}
-            searching={Boolean(videoSearchQuery)}
-            userNameById={userNameById}
-            onPreviousPage={handlePreviousVideoPage}
-            onNextPage={handleNextVideoPage}
-            onEdit={setEditingVideo}
-            onDelete={setDeletingVideo}
-          />
-          {editingVideo && (
-            <EditVideoDialog
-              video={editingVideo}
-              onSubmit={handleUpdateVideo}
-              open
-              onOpenChange={(open) => {
-                if (!open) setEditingVideo(null);
-              }}
-            />
-          )}
-          {deletingVideo && (
-            <DeleteVideoDialog
-              video={deletingVideo}
-              onDelete={handleDeleteVideo}
-              open
-              onOpenChange={(open) => {
-                if (!open) setDeletingVideo(null);
-              }}
-            />
-          )}
-        </>
+        <DouyinVideosPanel
+          canGoNext={canGoNext}
+          canGoPrevious={canGoPrevious}
+          deletingVideo={deletingVideo}
+          displayedFirstVideoNumber={displayedFirstVideoNumber}
+          displayedLastVideoNumber={displayedLastVideoNumber}
+          displayedVideoTotal={displayedVideoTotal}
+          editingVideo={editingVideo}
+          filteredVideos={filteredVideos}
+          loading={loading}
+          userNameById={userNameById}
+          videoSearchQuery={videoSearchQuery}
+          videosLoading={videosLoading}
+          onDeleteVideo={handleDeleteVideo}
+          onEditVideoChange={setEditingVideo}
+          onDeleteVideoChange={setDeletingVideo}
+          onNextVideoPage={handleNextVideoPage}
+          onPreviousVideoPage={handlePreviousVideoPage}
+          onUpdateVideo={handleUpdateVideo}
+        />
       )}
     </Page>
   );

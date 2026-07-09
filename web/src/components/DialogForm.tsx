@@ -16,33 +16,44 @@ import {
 type SubmitResult = boolean | undefined;
 
 interface Props {
+  trigger?: ReactNode | null;
   triggerText?: string;
   title?: string;
   description?: string;
   children?: ReactNode;
   cancelText?: string;
   okText?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onSubmit: () => SubmitResult | Promise<SubmitResult>;
   onClose?: () => void;
 }
 
 export default function DialogForm({
+  trigger,
   triggerText = "Open",
   title = "Dialog",
   description,
   children,
   cancelText = "Cancel",
   okText = "Save changes",
+  open,
+  onOpenChange,
   onSubmit,
   onClose,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const dialogOpen = open ?? internalOpen;
 
   const handleOpenChange = (state: boolean) => {
     if (submitting && !state) return;
-    setOpen(state);
+    if (onOpenChange) {
+      onOpenChange(state);
+    } else {
+      setInternalOpen(state);
+    }
     if (!state) {
       setSubmitError("");
       onClose?.();
@@ -65,10 +76,10 @@ export default function DialogForm({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button>{triggerText}</Button>
-      </DialogTrigger>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
+      {trigger !== null && (
+        <DialogTrigger asChild>{trigger ?? <Button>{triggerText}</Button>}</DialogTrigger>
+      )}
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader className="mb-4">

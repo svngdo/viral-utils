@@ -75,3 +75,43 @@ async def create_fetch_user_videos_job(
         id=job.id,
         events_url=str(request.url_for("get_job_events", job_id=job.id)),
     )
+
+
+@router.post("/download-videos")
+async def create_download_videos_job(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: DbConnection,
+):
+    """Create a job that downloads pending Douyin videos."""
+    job = job_service.create_job()
+    background_tasks.add_task(
+        douyin_job_service.run_download_videos_job,
+        job.id,
+        db,
+    )
+    return JobCreateResponse(
+        id=job.id,
+        events_url=str(request.url_for("get_job_events", job_id=job.id)),
+    )
+
+
+@router.post("/users/download-videos")
+async def create_download_selected_user_videos_job(
+    request: Request,
+    payload: FetchSelectedUserVideosRequest,
+    background_tasks: BackgroundTasks,
+    db: DbConnection,
+):
+    """Create a job that downloads pending Douyin videos for selected users."""
+    job = job_service.create_job()
+    background_tasks.add_task(
+        douyin_job_service.run_download_selected_user_videos_job,
+        job.id,
+        payload.user_ids,
+        db,
+    )
+    return JobCreateResponse(
+        id=job.id,
+        events_url=str(request.url_for("get_job_events", job_id=job.id)),
+    )

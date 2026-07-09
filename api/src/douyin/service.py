@@ -353,7 +353,6 @@ async def _sync_user_videos(
                     digg_count=video["digg_count"],
                     duration=video["duration"],
                     urls=video["urls"],
-                    is_downloaded=video["is_downloaded"],
                 ),
                 db=db,
             )
@@ -394,7 +393,7 @@ async def fetch_latest_videos(
         job_service.raise_if_cancelled(cancel)
 
         if not fetched_user:
-            logger.warning("Skip - failed to fetch - sec_uid=%s", user.sec_uid)
+            yield LogEvent(message="Skip - TikHub returned no videos")
             continue
 
         yield LogEvent(message=f"Syncing {_display_user_name(user)}")
@@ -484,9 +483,13 @@ async def fetch_selected_user_videos(
                 cancel=cancel,
             ):
                 yield event
-        except FetchUserVideosError:
-            logger.warning("Skip - failed to fetch - user_id=%s", user_id)
-            yield LogEvent(message=f"Failed to fetch {_display_user_name(existing)}")
+        except FetchUserVideosError as e:
+            logger.warning(
+                "Skip fetch user videos - %s - sec_uid=%s",
+                e.message,
+                existing.sec_uid,
+            )
+            yield LogEvent(message=f"Skipped {_display_user_name(existing)}: {e.message}")
 
         completed += 1
         yield ProgressEvent(done=completed, total=total)
@@ -510,7 +513,9 @@ async def _fetch_and_sync_user_videos(
         tikhub=tikhub,
     )
     if not fetched_user:
-        raise FetchUserVideosError()
+        raise FetchUserVideosError(
+            f"TikHub returned no videos for sec_uid={existing.sec_uid}"
+        )
 
     job_service.raise_if_cancelled(cancel)
 
@@ -601,11 +606,13 @@ async def download_video(video: Video, db: Connection) -> tuple[Video, bool]:
     return video, False
 
 
-async def download_latest_videos(db: Connection) -> AsyncGenerator[SSEEvent]:
+async def _download_videos(
+    available_videos: list[Video],
+    db: Connection,
+    cancel: threading.Event | None = None,
+) -> AsyncGenerator[SSEEvent]:
     yield StatusEvent(status=JobStatus.RUNNING)
-    yield LogEvent(message="Downloading latest videos")
 
-    available_videos = await repo.select_videos_to_download(db=db)
     if not available_videos:
         yield LogEvent(message="No videos to download")
         yield StatusEvent(status=JobStatus.COMPLETED)
@@ -623,10 +630,13 @@ async def download_latest_videos(db: Connection) -> AsyncGenerator[SSEEvent]:
     ]
 
     for coro in asyncio.as_completed(tasks):
+        job_service.raise_if_cancelled(cancel)
         video, result = await coro
+        job_service.raise_if_cancelled(cancel)
 
         completed += 1
         if video.is_downloaded == result:
+            yield ProgressEvent(done=completed, total=total)
             continue
 
         await repo.update_video_by_id(
@@ -642,3 +652,33 @@ async def download_latest_videos(db: Connection) -> AsyncGenerator[SSEEvent]:
 
     yield LogEvent(message=f"{completed}/{total} videos are downloaded")
     yield StatusEvent(status=JobStatus.COMPLETED)
+
+
+async def download_latest_videos(
+    db: Connection,
+    cancel: threading.Event | None = None,
+) -> AsyncGenerator[SSEEvent]:
+    available_videos = await repo.select_videos_to_download(db=db)
+    async for event in _download_videos(
+        available_videos=available_videos,
+        db=db,
+        cancel=cancel,
+    ):
+        yield event
+
+
+async def download_selected_user_videos(
+    user_ids: list[int],
+    db: Connection,
+    cancel: threading.Event | None = None,
+) -> AsyncGenerator[SSEEvent]:
+    available_videos = await repo.select_videos_to_download_by_user_ids(
+        user_ids=user_ids,
+        db=db,
+    )
+    async for event in _download_videos(
+        available_videos=available_videos,
+        db=db,
+        cancel=cancel,
+    ):
+        yield event

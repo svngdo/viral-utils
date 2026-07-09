@@ -52,6 +52,18 @@ export const createFetchSelectedUsersJob = (userIds: number[]): Promise<JobCreat
     body: JSON.stringify({ user_ids: userIds }),
   });
 
+export const createDownloadActiveVideosJob = (): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>("/jobs/douyin/download-videos", {
+    method: "POST",
+  });
+
+export const createDownloadSelectedUsersJob = (userIds: number[]): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>("/jobs/douyin/users/download-videos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_ids: userIds }),
+  });
+
 export const getVideoPage = ({
   limit,
   offset,
