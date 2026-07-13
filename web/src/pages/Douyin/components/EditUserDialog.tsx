@@ -1,4 +1,4 @@
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import DialogForm from "@/components/DialogForm";
 import UserFields from "@/pages/Douyin/components/UserFields";
@@ -10,10 +10,21 @@ interface EditUserDialogProps {
   user: DouyinUser;
   systems: System[];
   statuses: DouyinUserStatus[];
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onSubmit: (id: number, data: DouyinUserUpdate) => Promise<void>;
 }
 
-export default function EditUserDialog({ user, systems, statuses, onSubmit }: EditUserDialogProps) {
+export default function EditUserDialog({
+  user,
+  systems,
+  statuses,
+  trigger,
+  open,
+  onOpenChange,
+  onSubmit,
+}: EditUserDialogProps) {
   const [inputs, setInputs] = useState(() => userInputsFromUser(user));
 
   useEffect(() => {
@@ -35,7 +46,14 @@ export default function EditUserDialog({ user, systems, statuses, onSubmit }: Ed
   };
 
   return (
-    <DialogForm triggerText="Edit" title="Edit User" onSubmit={handleSubmit}>
+    <DialogForm
+      trigger={trigger}
+      triggerText="Edit"
+      title="Edit User"
+      open={open}
+      onOpenChange={onOpenChange}
+      onSubmit={handleSubmit}
+    >
       <UserFields
         inputs={inputs}
         systems={systems}

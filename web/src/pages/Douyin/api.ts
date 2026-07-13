@@ -8,6 +8,7 @@ import type {
   DouyinVideoPage,
   DouyinVideoUpdate,
 } from "@/pages/Douyin/types";
+import type { JobCreateResponse } from "@/pages/Video/types";
 
 export const getUserStatuses = (): Promise<DouyinUserStatus[]> =>
   apiFetch<DouyinUserStatus[]>("/douyin/user-statuses");
@@ -33,6 +34,35 @@ export const updateUser = (id: number, data: DouyinUserUpdate): Promise<DouyinUs
 
 export const removeUser = (id: number): Promise<void> =>
   apiFetch<void>(`/douyin/users/${id}`, { method: "DELETE" });
+
+export const createFetchActiveUsersJob = (): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>("/jobs/douyin/fetch-latest-videos", {
+    method: "POST",
+  });
+
+export const createFetchUserVideosJob = (userId: number): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>(`/jobs/douyin/users/${userId}/fetch-videos`, {
+    method: "POST",
+  });
+
+export const createFetchSelectedUsersJob = (userIds: number[]): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>("/jobs/douyin/users/fetch-videos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_ids: userIds }),
+  });
+
+export const createDownloadActiveVideosJob = (): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>("/jobs/douyin/download-videos", {
+    method: "POST",
+  });
+
+export const createDownloadSelectedUsersJob = (userIds: number[]): Promise<JobCreateResponse> =>
+  apiFetch<JobCreateResponse>("/jobs/douyin/users/download-videos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_ids: userIds }),
+  });
 
 export const getVideoPage = ({
   limit,

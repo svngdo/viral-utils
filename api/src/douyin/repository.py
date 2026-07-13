@@ -19,6 +19,7 @@ from src.douyin.queries import (
     SELECT_VIDEOS_BY_USER_ID,
     SELECT_VIDEOS_PAGE,
     SELECT_VIDEOS_TO_DOWNLOAD,
+    SELECT_VIDEOS_TO_DOWNLOAD_BY_USER_IDS,
     UPDATE_USER_BY_ID,
     UPDATE_VIDEO_BY_ID,
     UPSERT_USER,
@@ -127,6 +128,22 @@ async def select_videos_page(limit: int, offset: int, db: Connection) -> list[Vi
 
 async def select_videos_to_download(db: Connection) -> list[Video]:
     cur = await db.execute(SELECT_VIDEOS_TO_DOWNLOAD)
+    rows = await cur.fetchall()
+    return [Video.model_validate(dict(row)) for row in rows]
+
+
+async def select_videos_to_download_by_user_ids(
+    user_ids: list[int], db: Connection
+) -> list[Video]:
+    if not user_ids:
+        return []
+
+    placeholders = ", ".join(f":user_id_{index}" for index in range(len(user_ids)))
+    params = {f"user_id_{index}": user_id for index, user_id in enumerate(user_ids)}
+    cur = await db.execute(
+        SELECT_VIDEOS_TO_DOWNLOAD_BY_USER_IDS.format(placeholders=placeholders),
+        params,
+    )
     rows = await cur.fetchall()
     return [Video.model_validate(dict(row)) for row in rows]
 

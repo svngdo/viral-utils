@@ -1,136 +1,95 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as douyinApi from "@/pages/Douyin/api";
-import { DEFAULT_STATUSES, VIDEO_PAGE_SIZE } from "@/pages/Douyin/constants";
-import {
-  getUserDisplayName,
-  getUserSecondaryName,
-  getVideoDisplayTitle,
-  getVideoSecondaryTitle,
-} from "@/pages/Douyin/display";
-import { formatDateTime } from "@/pages/Douyin/format";
-import type {
-  DouyinUser,
-  DouyinUserCreate,
-  DouyinUserStatus,
-  DouyinUserUpdate,
-  DouyinVideo,
-  DouyinVideoUpdate,
-} from "@/pages/Douyin/types";
-import * as systemApi from "@/pages/Systems/api";
-import type { System } from "@/pages/Systems/types";
-
-function normalizeSearch(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function matchesSearch(values: unknown[], query: string) {
-  if (!query) return true;
-
-  return values
-    .filter((value) => value !== null && value !== undefined)
-    .some((value) => String(value).toLowerCase().includes(query));
-}
+import { VIDEO_PAGE_SIZE } from "@/pages/Douyin/constants";
+import useDouyinData from "@/pages/Douyin/hooks/useDouyinData";
+import useDouyinFilters from "@/pages/Douyin/hooks/useDouyinFilters";
+import useDouyinJob from "@/pages/Douyin/hooks/useDouyinJob";
+import useDouyinMutations from "@/pages/Douyin/hooks/useDouyinMutations";
+import useDouyinSelection from "@/pages/Douyin/hooks/useDouyinSelection";
+import type { DouyinUserStatus, DouyinVideo } from "@/pages/Douyin/types";
 
 export default function useDouyinPage() {
   const [activeTab, setActiveTab] = useState<"users" | "videos">("users");
-  const [users, setUsers] = useState<DouyinUser[]>([]);
-  const [videos, setVideos] = useState<DouyinVideo[]>([]);
-  const [videoTotal, setVideoTotal] = useState(0);
-  const [videoOffset, setVideoOffset] = useState(0);
-  const [videosLoading, setVideosLoading] = useState(false);
-  const [systems, setSystems] = useState<System[]>([]);
-  const [statuses, setStatuses] = useState<DouyinUserStatus[]>(DEFAULT_STATUSES);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSystemFilter, setUserSystemFilter] = useState<number | "all" | "none">("all");
+  const [userStatusFilter, setUserStatusFilter] = useState<DouyinUserStatus | "all">("all");
   const [videoSearchQuery, setVideoSearchQuery] = useState("");
   const [editingVideo, setEditingVideo] = useState<DouyinVideo | null>(null);
   const [deletingVideo, setDeletingVideo] = useState<DouyinVideo | null>(null);
-  const firstVideoNumber = videoTotal ? videoOffset + 1 : 0;
-  const lastVideoNumber = Math.min(videoOffset + videos.length, videoTotal);
-  const canGoPrevious = videoOffset > 0 && !videosLoading;
-  const canGoNext = videoOffset + VIDEO_PAGE_SIZE < videoTotal && !videosLoading;
+  const [latestJobKind, setLatestJobKind] = useState<"sync" | "download" | null>(null);
+
+  const {
+    canGoNext,
+    canGoPrevious,
+    firstVideoNumber,
+    lastVideoNumber,
+    loadData,
+    loadVideoPage,
+    setUsers,
+    statuses,
+    systems,
+    users,
+    videoOffset,
+    videoTotal,
+    videos,
+    videosLoading,
+  } = useDouyinData();
+
   const displayError = loadError || actionError;
-  const systemNameById = useMemo(
-    () => new Map(systems.map((system) => [system.id, system.name])),
-    [systems],
-  );
-  const userNameById = useMemo(
-    () => new Map(users.map((user) => [user.id, getUserDisplayName(user)])),
-    [users],
-  );
-  const filteredUsers = useMemo(() => {
-    const query = normalizeSearch(userSearchQuery);
-    return users.filter((user) =>
-      matchesSearch(
-        [
-          user.id,
-          getUserDisplayName(user),
-          getUserSecondaryName(user),
-          user.name,
-          user.translated_name,
-          user.sec_uid,
-          user.status,
-          user.topic,
-          user.niche,
-          user.sub_niche,
-          user.micro_niche,
-          user.note,
-          user.system_id ? systemNameById.get(user.system_id) : null,
-        ],
-        query,
-      ),
-    );
-  }, [systemNameById, userSearchQuery, users]);
-  const filteredVideos = useMemo(() => {
-    const query = normalizeSearch(videoSearchQuery);
-    return videos.filter((video) =>
-      matchesSearch(
-        [
-          video.id,
-          video.aweme_id,
-          getVideoDisplayTitle(video),
-          getVideoSecondaryTitle(video),
-          video.title,
-          video.translated_title,
-          userNameById.get(video.user_id),
-          video.user_id,
-          video.digg_count,
-          formatDateTime(video.create_time),
-          video.is_downloaded ? "yes downloaded true" : "no not downloaded false",
-        ],
-        query,
-      ),
-    );
-  }, [userNameById, videoSearchQuery, videos]);
 
-  const loadVideoPage = useCallback(async (offset: number) => {
-    setVideosLoading(true);
-    try {
-      const page = await douyinApi.getVideoPage({ limit: VIDEO_PAGE_SIZE, offset });
-      setVideos(page.items);
-      setVideoTotal(page.total);
-      setVideoOffset(page.offset);
-    } finally {
-      setVideosLoading(false);
-    }
+  const handleActionError = useCallback((message: string) => {
+    setActionError(message);
   }, []);
 
-  const loadData = useCallback(async () => {
-    const [nextUsers, nextVideoPage, nextSystems, nextStatuses] = await Promise.all([
-      douyinApi.getUsers(),
-      douyinApi.getVideoPage({ limit: VIDEO_PAGE_SIZE, offset: 0 }),
-      systemApi.getAll(),
-      douyinApi.getUserStatuses().catch(() => DEFAULT_STATUSES),
-    ]);
+  const refreshAfterFetchJob = useCallback(async () => {
+    const [nextUsers] = await Promise.all([douyinApi.getUsers(), loadVideoPage(videoOffset)]);
     setUsers(nextUsers);
-    setVideos(nextVideoPage.items);
-    setVideoTotal(nextVideoPage.total);
-    setVideoOffset(nextVideoPage.offset);
-    setSystems(nextSystems);
-    setStatuses(nextStatuses);
-  }, []);
+  }, [loadVideoPage, setUsers, videoOffset]);
+
+  const syncJob = useDouyinJob({
+    completeLogMessage: "Sync complete",
+    defaultStartErrorMessage: "Could not start sync job",
+    incompleteErrorMessage: "Sync job did not complete",
+    kind: "sync",
+    pollErrorMessage: "Could not stream sync progress",
+    refreshErrorMessage: "Could not refresh Douyin data",
+    runningLogMessage: "Syncing...",
+    terminalLogPrefix: "Sync",
+    onCompleted: refreshAfterFetchJob,
+    onError: handleActionError,
+    onLatestKindChange: setLatestJobKind,
+  });
+
+  const downloadJob = useDouyinJob({
+    completeLogMessage: "Download complete",
+    defaultStartErrorMessage: "Could not start download job",
+    incompleteErrorMessage: "Download job did not complete",
+    kind: "download",
+    pollErrorMessage: "Could not stream download progress",
+    refreshErrorMessage: "Could not refresh Douyin videos",
+    runningLogMessage: "Downloading...",
+    terminalLogPrefix: "Download",
+    onCompleted: () => loadVideoPage(videoOffset),
+    onError: handleActionError,
+    onLatestKindChange: setLatestJobKind,
+  });
+
+  const {
+    handleCreateUser,
+    handleDeleteUser,
+    handleDeleteVideo,
+    handleUpdateUser,
+    handleUpdateVideo,
+  } = useDouyinMutations({
+    loadVideoPage,
+    setActionError,
+    setUsers,
+    videoOffset,
+    videos,
+  });
 
   useEffect(() => {
     loadData()
@@ -138,70 +97,64 @@ export default function useDouyinPage() {
       .finally(() => setLoading(false));
   }, [loadData]);
 
-  const handleCreateUser = async (data: DouyinUserCreate) => {
-    setActionError("");
-    try {
-      const created = await douyinApi.createUser(data);
-      setUsers((prev) => [created, ...prev]);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not create user";
-      setActionError(message);
-      throw new Error(message);
-    }
+  const { selectedUserCount, selectedUserIds, setSelectedUserIds, handleToggleUserSelected } =
+    useDouyinSelection({ users });
+
+  const {
+    allVisibleUsersSelected,
+    filteredUsers,
+    filteredVideos,
+    someVisibleUsersSelected,
+    systemNameById,
+    userNameById,
+  } = useDouyinFilters({
+    selectedUserIds,
+    systems,
+    userSearchQuery,
+    userSystemFilter,
+    userStatusFilter,
+    users,
+    videoSearchQuery,
+    videos,
+  });
+
+  const handleToggleAllVisibleUsers = (selected: boolean) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      for (const user of filteredUsers) {
+        if (selected) {
+          next.add(user.id);
+        } else {
+          next.delete(user.id);
+        }
+      }
+      return next;
+    });
   };
 
-  const handleUpdateUser = async (id: number, data: DouyinUserUpdate) => {
+  const handleFetchActiveUsers = () => {
     setActionError("");
-    try {
-      const updated = await douyinApi.updateUser(id, data);
-      setUsers((prev) => prev.map((user) => (user.id === id ? updated : user)));
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not update user";
-      setActionError(message);
-      throw new Error(message);
-    }
+    void syncJob.startJob("active", () => douyinApi.createFetchActiveUsersJob());
   };
 
-  const handleDeleteUser = async (id: number) => {
+  const handleFetchSelectedUsers = () => {
+    const userIds = [...selectedUserIds];
+    if (!userIds.length) return;
     setActionError("");
-    try {
-      await douyinApi.removeUser(id);
-      setUsers((prev) => prev.filter((user) => user.id !== id));
-      await loadVideoPage(videoOffset);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not delete user";
-      setActionError(message);
-      throw new Error(message);
-    }
+    void syncJob.startJob("selected", () => douyinApi.createFetchSelectedUsersJob(userIds));
   };
 
-  const handleUpdateVideo = async (id: number, data: DouyinVideoUpdate) => {
+  const handleDownloadActiveVideos = useCallback(() => {
     setActionError("");
-    try {
-      await douyinApi.updateVideo(id, data);
-      await loadVideoPage(videoOffset);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not update video";
-      setActionError(message);
-      throw new Error(message);
-    }
-  };
+    void downloadJob.startJob("active", () => douyinApi.createDownloadActiveVideosJob());
+  }, [downloadJob]);
 
-  const handleDeleteVideo = async (id: number) => {
+  const handleDownloadSelectedUsers = useCallback(() => {
+    const userIds = [...selectedUserIds];
+    if (!userIds.length) return;
     setActionError("");
-    try {
-      await douyinApi.removeVideo(id);
-      const nextOffset =
-        videos.length === 1 && videoOffset > 0
-          ? Math.max(0, videoOffset - VIDEO_PAGE_SIZE)
-          : videoOffset;
-      await loadVideoPage(nextOffset);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not delete video";
-      setActionError(message);
-      throw new Error(message);
-    }
-  };
+    void downloadJob.startJob("selected", () => douyinApi.createDownloadSelectedUsersJob(userIds));
+  }, [downloadJob, selectedUserIds]);
 
   const handlePreviousVideoPage = () => {
     void loadVideoPage(Math.max(0, videoOffset - VIDEO_PAGE_SIZE)).catch(() =>
@@ -225,25 +178,48 @@ export default function useDouyinPage() {
     filteredUsers,
     filteredVideos,
     firstVideoNumber,
+    allVisibleUsersSelected,
     handleCreateUser,
+    handleCancelDownloadJob: downloadJob.cancelJob,
+    handleCancelFetchJob: syncJob.cancelJob,
     handleDeleteUser,
     handleDeleteVideo,
+    handleDownloadActiveVideos,
+    handleDownloadSelectedUsers,
+    handleFetchActiveUsers,
+    handleFetchSelectedUsers,
     handleNextVideoPage,
     handlePreviousVideoPage,
+    handleToggleAllVisibleUsers,
+    handleToggleUserSelected,
     handleUpdateUser,
     handleUpdateVideo,
+    isDownloadJobRunning: downloadJob.isRunning,
+    isFetchJobRunning: syncJob.isRunning,
     lastVideoNumber,
+    latestJobKind,
     loading,
     setActiveTab,
     setDeletingVideo,
     setEditingVideo,
+    setUserSystemFilter,
+    setUserStatusFilter,
     setUserSearchQuery,
     setVideoSearchQuery,
+    selectedUserCount,
+    selectedUserIds,
+    someVisibleUsersSelected,
+    downloadJobScope: downloadJob.scope,
+    downloadEvents: downloadJob.events,
+    syncJobScope: syncJob.scope,
+    syncEvents: syncJob.events,
     statuses,
     systemNameById,
     systems,
     userNameById,
     users,
+    userSystemFilter,
+    userStatusFilter,
     videoTotal,
     userSearchQuery,
     videoSearchQuery,

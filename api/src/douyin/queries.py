@@ -173,7 +173,6 @@ DO UPDATE SET
     digg_count = EXCLUDED.digg_count,
     duration = EXCLUDED.duration,
     urls = EXCLUDED.urls,
-    is_downloaded = EXCLUDED.is_downloaded,
     user_id = EXCLUDED.user_id
 """
 
@@ -195,6 +194,12 @@ WHERE u.status IN ('active', 'testing')
 AND v.is_downloaded = 0
 """
 # OR date(last_fetched, 'unixepoch') < date('now')
+
+SELECT_VIDEOS_TO_DOWNLOAD_BY_USER_IDS = """
+SELECT v.* FROM videos v
+WHERE v.is_downloaded = 0
+AND v.user_id IN ({placeholders})
+"""
 
 
 SELECT_VIDEO_BY_ID = "SELECT * FROM videos WHERE id = :id"

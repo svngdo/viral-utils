@@ -1,5 +1,5 @@
 import { AlertCircle, LoaderCircle } from "lucide-react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -19,18 +19,32 @@ import type { DouyinUser } from "@/pages/Douyin/types";
 
 interface DeleteUserDialogProps {
   user: DouyinUser;
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onDelete: (id: number) => Promise<void>;
 }
 
-export default function DeleteUserDialog({ user, onDelete }: DeleteUserDialogProps) {
+export default function DeleteUserDialog({
+  user,
+  trigger,
+  open,
+  onOpenChange,
+  onDelete,
+}: DeleteUserDialogProps) {
   const displayName = getUserDisplayName(user);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const dialogOpen = open ?? internalOpen;
 
   const handleOpenChange = (state: boolean) => {
     if (deleting && !state) return;
-    setOpen(state);
+    if (onOpenChange) {
+      onOpenChange(state);
+    } else {
+      setInternalOpen(state);
+    }
     if (!state) setError("");
   };
 
@@ -40,7 +54,7 @@ export default function DeleteUserDialog({ user, onDelete }: DeleteUserDialogPro
     setError("");
     try {
       await onDelete(user.id);
-      setOpen(false);
+      handleOpenChange(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete user");
     } finally {
@@ -49,12 +63,16 @@ export default function DeleteUserDialog({ user, onDelete }: DeleteUserDialogPro
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          Delete
-        </Button>
-      </AlertDialogTrigger>
+    <AlertDialog open={dialogOpen} onOpenChange={handleOpenChange}>
+      {trigger !== null && (
+        <AlertDialogTrigger asChild>
+          {trigger ?? (
+            <Button size="sm" variant="outline">
+              Delete
+            </Button>
+          )}
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete User {displayName}</AlertDialogTitle>
