@@ -1,10 +1,4 @@
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import VideoPagination from "@/pages/Douyin/components/VideoPagination";
 import VideoTableMessageRow from "@/pages/Douyin/components/VideoTableMessageRow";
 import VideoTableRow from "@/pages/Douyin/components/VideoTableRow";
