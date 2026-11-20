@@ -1,8 +1,36 @@
 from datetime import UTC, datetime
+from typing import Literal
+from uuid import UUID
 
-from pydantic import UUID4, BaseModel, field_validator
+from pydantic import UUID4, BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 from src.types import SystemName
+
+VALID_ORDER_COLUMNS: set[str] = {
+    "id",
+    "name",
+    "description",
+    "created_at",
+    "updated_at",
+}
+
+OrderByColumns = Literal[
+    "id",
+    "name",
+    "description",
+    "created_at",
+    "updated_at",
+]
+
+
+class SystemOrderBy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: OrderByColumns
+    desc: bool
+
+
+SystemSortingList = TypeAdapter(list[SystemOrderBy])
 
 
 class System(BaseModel):
@@ -21,10 +49,15 @@ class System(BaseModel):
         return value.astimezone(UTC)
 
 
-class SystemCreate(BaseModel):
+class SystemRequest(BaseModel):
     name: SystemName
     description: str | None
 
 
-class SystemUpdate(SystemCreate):
-    pass
+class SystemListResponse(BaseModel):
+    items: list[System]
+    total: int
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[UUID] = Field(min_length=1, max_length=500)
