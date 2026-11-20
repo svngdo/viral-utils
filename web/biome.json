@@ -1,31 +1,54 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
   "vcs": {
-    "enabled": false,
+    "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": false
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false
   },
   "formatter": {
+    "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
-    "lineWidth": 100
+    "lineWidth": 88
   },
   "linter": {
+    "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
-        "noUnusedImports": { "level": "error", "fix": "safe" }
+        "noUnusedImports": {
+          "level": "error",
+          "fix": "safe"
+        },
+        "noUnusedVariables": "off",
+        "noUnusedFunctionParameters": "off"
       },
-      "style": {
-        "useConst": "error"
+      "nursery": {
+        "useTailwindSortedClasses": {
+          "level": "error",
+          "fix": "safe"
+        }
       }
     }
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
+      "semicolons": "always",
       "trailingCommas": "all",
-      "semicolons": "always"
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
     }
   },
   "css": {
@@ -33,11 +56,7 @@
       "tailwindDirectives": true
     }
   },
-  "assist": {
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
+  "tailwind": {
+    "stylesheet": "./src/index.css"
   }
 }
