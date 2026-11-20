@@ -1,23 +1,54 @@
-export const apiUrl = import.meta.env.VITE_API_URL;
+type QueryValue = string | number | boolean | undefined;
 
-export function apiAbsoluteUrl(pathOrUrl: string): string {
-  if (pathOrUrl.startsWith("http")) return pathOrUrl;
-  if (!apiUrl) throw new Error("Missing VITE_API_URL");
-  return `${apiUrl}${pathOrUrl}`;
+interface ApiOptions extends RequestInit {
+  params?: Record<string, QueryValue>;
 }
 
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(apiAbsoluteUrl(path), options);
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? JSON.stringify(body);
-    } catch {
-      detail = await res.text();
-    }
-    throw new Error(`Request failed: ${res.status} ${path}${detail ? ` - ${detail}` : ""}`);
+type ErrorBody = {
+  detail?: string | { message?: string } | { msg?: string }[];
+};
+
+const baseUrl = import.meta.env.VITE_API_URL;
+
+function getErrorMessage(result: ErrorBody | null, status: number): string {
+  const detail = result?.detail;
+  if (typeof detail === "string") return detail;
+  if (!Array.isArray(detail) && typeof detail?.message === "string")
+    return detail.message;
+  if (Array.isArray(detail) && typeof detail[0]?.msg === "string") return detail[0].msg;
+  return `Request failed (${status})`;
+}
+
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  if (!baseUrl?.trim()) {
+    throw new Error("Set VITE_API_URL in web/.env before making API requests");
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+
+  const { params, ...requestOptions } = options;
+
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`);
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const headers = new Headers(requestOptions.headers);
+  if (requestOptions.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(url, { ...requestOptions, headers });
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(result, response.status));
+  }
+
+  return result as T;
 }
